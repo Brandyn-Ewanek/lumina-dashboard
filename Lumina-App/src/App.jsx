@@ -6,6 +6,9 @@ import {
   ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 
+import { Analytics } from "@vercel/analytics/react";
+import { track } from "@vercel/analytics";
+
 const globalStyles = `
   @keyframes water-ripple {
     0% { transform: translate(-50%, -50%) scale(0); opacity: 0.4; }
@@ -114,6 +117,16 @@ export default function App() {
   const [aiSentiment, setAiSentiment] = useState([{ sentiment: 'Analyzing...', confidence: '--', summary: 'Awaiting API...' }]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
+
+  // --- VERCEL CUSTOM TRACKING HELPER ---
+  const handleTabChange = (tabId, tabName) => {
+    setActiveTab(tabId);
+    try {
+      track('Menu_Navigated', { destination: tabName });
+    } catch (e) {
+      // Fail silently if analytics isn't ready
+    }
+  };
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -302,7 +315,7 @@ export default function App() {
       return newList;
     });
     setSavedStocks([]); 
-    setActiveTab('portfolio'); 
+    handleTabChange('portfolio', 'Portfolio Tracker'); 
   };
 
   return (
@@ -318,7 +331,7 @@ export default function App() {
 
       {/* Sidebar Navigation */}
       <nav className="fixed top-6 left-6 h-[calc(100vh-48px)] w-64 bg-[#0a1128]/85 border border-[#1e3a8a]/50 backdrop-blur-2xl rounded-3xl hidden md:flex flex-col z-10 shadow-2xl shadow-black/80">
-        <div className="p-6 cursor-pointer" onClick={() => setActiveTab('home')}>
+        <div className="p-6 cursor-pointer" onClick={() => handleTabChange('home', 'Dashboard Home')}>
           <h1 className="text-xl font-serif font-semibold bg-gradient-to-br from-amber-100 via-amber-200 to-yellow-600 bg-clip-text text-transparent tracking-widest uppercase flex items-center gap-2 drop-shadow-md">
             <Sparkles size={20} className="text-amber-300" />
             Lumina
@@ -326,11 +339,11 @@ export default function App() {
         </div>
 
         <div className="flex-1 px-4 space-y-2 mt-4">
-          <NavItem icon={<Activity size={18} />} label="Macro Screener" active={activeTab === 'macro'} onClick={() => setActiveTab('macro')} />
-          <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => setActiveTab('portfolio')} />
-          <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => setActiveTab('deep')} />
-          <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => setActiveTab('bench')} />
-          <NavItem icon={<Newspaper size={18} />} label="AI News Engine" active={activeTab === 'news'} onClick={() => setActiveTab('news')} />
+          <NavItem icon={<Activity size={18} />} label="Macro Screener" active={activeTab === 'macro'} onClick={() => handleTabChange('macro', 'Macro Screener')} />
+          <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => handleTabChange('portfolio', 'Portfolio Tracker')} />
+          <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => handleTabChange('deep', 'Target Analysis')} />
+          <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => handleTabChange('bench', 'Macro Correlator')} />
+          <NavItem icon={<Newspaper size={18} />} label="AI News Engine" active={activeTab === 'news'} onClick={() => handleTabChange('news', 'AI News Engine')} />
         </div>
 
         <div className="p-4 m-4 bg-[#111c38]/80 rounded-2xl border border-[#1e3a8a]/50 backdrop-blur-md">
@@ -438,13 +451,17 @@ export default function App() {
               <Star size={16} className="mr-1.5" /> Save to Portfolio
             </button>
             <button 
-              onClick={() => setActiveTab('deep')}
+              onClick={() => handleTabChange('deep', 'Target Analysis')}
               className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">
               Target Analysis <ChevronRight size={16} className="inline ml-1" />
             </button>
           </div>
         </div>
       )}
+
+      {/* Vercel Analytics Injection */}
+      <Analytics />
+
     </div>
   );
 }

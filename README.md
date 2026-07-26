@@ -2,7 +2,7 @@
 
 Lumina is a premium, serverless quantitative finance dashboard built for institutional-grade asset analysis. By leveraging a proprietary AWS data pipeline, Lumina tracks over 1,500 North American equities daily to bypass costly enterprise data subscriptions. It executes automated algorithmic scans, time-lagged macroeconomic correlation math, and AI-driven thesis synthesis, all completely decoupled from traditional web servers for near-zero operational costs.
 
-**[🌐 View Live Dashboard](https://lumina-dashboard.vercel.app)**
+**[🌐 View Live Dashboard](https://lumina-dashboard-red.vercel.app/)**
 
 
 ## Core Tech Stack

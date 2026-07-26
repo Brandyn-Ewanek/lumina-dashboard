@@ -6,7 +6,7 @@ Lumina is a premium, serverless quantitative finance dashboard built for institu
 
 
 ## Core Tech Stack
-
+cd
 *   **Frontend & Hosting:** React (Vite), Tailwind CSS, Custom Dependency-Free SVG Charting, Vercel (CI/CD)
 *   **Backend / Serverless Compute:** AWS Lambda (Python), direct Lambda Function URLs (architected to bypass API Gateway for zero-cost routing)
 *   **Data Engineering & Pipelines:** AWS ECS Fargate, AWS EventBridge (Cron), Docker, Pandas

@@ -3,11 +3,8 @@ import {
   LineChart, Search, TrendingUp, TrendingDown, Activity, Globe, Newspaper,
   ChevronRight, Bell, Menu, Sparkles, Filter, Plus, Check, ListOrdered, 
   RefreshCw, AlertTriangle, Loader2, Star, Briefcase, X, PieChart,
-  ArrowUpRight, ArrowDownRight
+  ArrowUpRight, ArrowDownRight, Users, DollarSign, ShieldAlert
 } from 'lucide-react';
-
-import { Analytics } from "@vercel/analytics/react";
-import { track } from "@vercel/analytics";
 
 const globalStyles = `
   @keyframes water-ripple {
@@ -115,17 +112,12 @@ export default function App() {
   const [liveData, setLiveData] = useState([]);
   const [macroData, setMacroData] = useState([]);
   const [aiSentiment, setAiSentiment] = useState([{ sentiment: 'Analyzing...', confidence: '--', summary: 'Awaiting API...' }]);
+  const [insiderData, setInsiderData] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
 
-  // --- VERCEL CUSTOM TRACKING HELPER ---
   const handleTabChange = (tabId, tabName) => {
     setActiveTab(tabId);
-    try {
-      track('Menu_Navigated', { destination: tabName });
-    } catch (e) {
-      // Fail silently if analytics isn't ready
-    }
   };
 
   useEffect(() => {
@@ -187,6 +179,17 @@ export default function App() {
           }
         } catch (err) {
           console.warn("No existing watchlist found in S3, starting fresh.");
+        }
+
+        try {
+          const insiderUrl = `${S3_BUCKET_URL}/dashboard/insider_trading/ranked_opportunities.json`;
+          const insiderResponse = await fetch(insiderUrl);
+          if (insiderResponse.ok) {
+            const insData = await insiderResponse.json();
+            setInsiderData(Array.isArray(insData) ? insData : []);
+          }
+        } catch (err) {
+          console.warn("No insider data found yet.");
         }
 
         // Process Stocks
@@ -343,6 +346,7 @@ export default function App() {
           <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => handleTabChange('portfolio', 'Portfolio Tracker')} />
           <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => handleTabChange('deep', 'Target Analysis')} />
           <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => handleTabChange('bench', 'Macro Correlator')} />
+          <NavItem icon={<Users size={18} />} label="Insider Tracking" active={activeTab === 'insider'} onClick={() => handleTabChange('insider', 'Insider Tracking')} />
           <NavItem icon={<Newspaper size={18} />} label="AI News Engine" active={activeTab === 'news'} onClick={() => handleTabChange('news', 'AI News Engine')} />
         </div>
 
@@ -425,6 +429,9 @@ export default function App() {
             {activeTab === 'bench' && (
               <EconomicAnalysis savedStocks={savedStocks} watchList={watchList} data={liveData} macroData={macroData} />
             )}
+            {activeTab === 'insider' && (
+              <InsiderTracking data={liveData} topOpportunities={insiderData} savedStocks={savedStocks} toggleSaved={toggleSavedStock} />
+            )}
             {activeTab === 'news' && (
               <AINewsEngine savedStocks={savedStocks} watchList={watchList} data={liveData} />
             )}
@@ -458,9 +465,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Vercel Analytics Injection */}
-      <Analytics />
 
     </div>
   );
@@ -2196,6 +2200,308 @@ function AINewsEngine({ savedStocks, watchList, data }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ==========================================
+// INSIDER TRACKING COMPONENT
+// ==========================================
+function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
+  const [selectedTicker, setSelectedTicker] = useState('');
+  const [timeframe, setTimeframe] = useState('180D');
+  const [hoveredTrade, setHoveredTrade] = useState(null);
+
+  useEffect(() => {
+    if (topOpportunities && topOpportunities.length > 0 && !selectedTicker) {
+      setSelectedTicker(topOpportunities[0].ticker);
+    }
+  }, [topOpportunities, selectedTicker]);
+
+  if (!topOpportunities || topOpportunities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-slide-up text-center">
+        <div className="w-24 h-24 rounded-full bg-[#111c38]/80 border border-[#1e3a8a]/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(30,58,138,0.3)]">
+          <Users size={40} className="text-blue-500/50" />
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-2">SEC Pipeline Initializing</h2>
+        <p className="text-slate-400 max-w-md">Waiting for the Fargate container to push the first set of Form 4 filings to S3.</p>
+      </div>
+    );
+  }
+
+  const currentOpportunity = topOpportunities.find(o => o.ticker === selectedTicker) || topOpportunities[0];
+  const stock = data.find(s => s.t === selectedTicker);
+  const history = stock ? (stock.history || []) : [];
+  
+  // Isolate the transactions
+  const transactions = currentOpportunity.insider_transactions || [];
+  
+  const filteredHistory = useMemo(() => {
+    if (history.length < 2) return history;
+    let days = 30;
+    if (timeframe === '60D') days = 60;
+    if (timeframe === '90D') days = 90;
+    if (timeframe === '180D') days = 180;
+    if (timeframe === '1Y') days = 365;
+    if (timeframe === 'MAX') days = 1800;
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    return history.filter(record => new Date(record.Date) >= cutoffDate);
+  }, [history, timeframe]);
+
+  const displayHistory = filteredHistory.length > 1 ? filteredHistory : history;
+
+  const chartProps = useMemo(() => {
+    if (displayHistory.length === 0) return null;
+    
+    const prices = displayHistory.map(r => r.Close_Price);
+    const targets = displayHistory.map(r => r.Target_Mean_Price || r.Close_Price);
+    
+    const allVals = [...prices, ...targets];
+    // Include the transaction prices in the bounds to make sure pins don't fall off the chart
+    transactions.forEach(t => {
+       if (t.price > 0) allVals.push(t.price);
+    });
+
+    const minVal = Math.min(...allVals) * 0.95; 
+    const maxVal = Math.max(...allVals) * 1.05;
+
+    const toPath = (dataset) => {
+      return dataset.map((v, i) => {
+        const x = (i / (dataset.length - 1)) * 100;
+        const y = 100 - ((v - minVal) / (maxVal - minVal)) * 100;
+        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
+    };
+
+    const pricePath = toPath(prices);
+    const targetPath = toPath(targets);
+
+    const startDt = new Date(displayHistory[0].Date);
+    const endDt = new Date(displayHistory[displayHistory.length - 1].Date);
+    const totalSpan = endDt.getTime() - startDt.getTime();
+
+    // Calculate exact X/Y coordinates for each transaction dot
+    const plottedTrades = transactions.map((trade, i) => {
+      const tradeDt = new Date(trade.date);
+      // Filter out trades outside our current view
+      if (tradeDt < startDt || tradeDt > endDt) return null;
+      
+      const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
+      const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
+      
+      // Determine dot size by transaction value (Log scale base to prevent massive circles)
+      let radius = 1.5;
+      if (trade.total_value > 100000) radius = 2;
+      if (trade.total_value > 500000) radius = 3;
+      if (trade.total_value > 1000000) radius = 4.5;
+      
+      return { ...trade, id: i, x: xPct, y: yPct, r: radius, isMassive: trade.total_value > 1000000 };
+    }).filter(Boolean);
+
+    const mid = new Date(startDt.getTime() + totalSpan / 2);
+    const formatDt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: timeframe === '1Y' || timeframe === 'MAX' ? '2-digit' : undefined });
+
+    return {
+      pricePath, targetPath, minVal, maxVal, plottedTrades,
+      labels: [formatDt(startDt), formatDt(mid), formatDt(endDt)]
+    };
+  }, [displayHistory, transactions, timeframe]);
+
+  // Total accumulation stats
+  const aggregateStats = useMemo(() => {
+    let totalBought = 0;
+    let highConvictionBuyers = new Set();
+    transactions.forEach(t => {
+      if (t.type === 'BUY' && !t.is_10b5_1) {
+        totalBought += t.total_value;
+        highConvictionBuyers.add(t.insider_name);
+      }
+    });
+    return { totalBought, uniqueBuyers: highConvictionBuyers.size };
+  }, [transactions]);
+
+  return (
+    <div className="max-w-7xl space-y-6 animate-slide-up" style={{ animationDuration: '0.3s' }}>
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 p-6 rounded-3xl shadow-xl shadow-black/40 gap-4">
+        <div>
+           <div className="flex items-center gap-3 mb-1">
+             <h2 className="text-2xl font-serif font-medium text-amber-50/90 tracking-wide flex items-center gap-3 drop-shadow-sm">
+               <Users size={24} className="text-amber-400/80" /> Insider & Director Form 4 Activity
+             </h2>
+           </div>
+           <p className="text-sm text-slate-400 mt-1">Cross-referencing {selectedTicker} C-suite open-market purchases with algorithmic price targets.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right mr-3">
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Total Open-Market Buys</p>
+            <p className="text-xl font-bold text-emerald-400">
+              ${(aggregateStats.totalBought / 1000000).toFixed(2)}M
+            </p>
+          </div>
+          <button 
+            onClick={() => toggleSaved(selectedTicker)}
+            className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
+          >
+            {savedStocks.includes(selectedTicker) ? <Check size={18} /> : <Plus size={18} />}
+            {savedStocks.includes(selectedTicker) ? 'In Portfolio' : 'Track Asset'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Graph Overlay */}
+      <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 flex flex-col min-h-[450px]">
+        <div className="flex flex-col xl:flex-row justify-between xl:items-start mb-6 gap-4">
+          <div>
+            <h3 className="text-3xl font-bold text-white tracking-tight">{selectedTicker} <span className="text-sm font-normal text-slate-400 ml-2">{stock?.n || 'Loading...'}</span></h3>
+            <div className="flex bg-[#07050f]/60 border border-[#2d254f]/80 rounded-xl p-1 mt-4 w-fit shadow-inner">
+              {['30D', '60D', '90D', '180D', '1Y', 'MAX'].map(tf => (
+                <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap xl:justify-end items-center gap-6 text-xs font-medium">
+            <div className="flex items-center gap-2 text-blue-400"><div className="w-3 h-0.5 bg-blue-500"></div> Close Price</div>
+            <div className="flex items-center gap-2 text-slate-500"><div className="w-3 h-0.5 border-t border-dashed border-slate-500"></div> Analyst Mean Target</div>
+            <div className="flex items-center gap-2 text-emerald-400">
+              <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/80 flex items-center justify-center"><div className="w-1 h-1 bg-emerald-400 rounded-full"></div></div> High-Volume Buy
+            </div>
+          </div>
+        </div>
+
+        {chartProps ? (
+          <div className="relative flex-1 w-full min-h-[300px] mt-2 group">
+            
+            {/* Y-Axis */}
+            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
+              <span>${chartProps.maxVal.toFixed(0)}</span>
+              <span>${((chartProps.maxVal + chartProps.minVal) / 2).toFixed(0)}</span>
+              <span>${chartProps.minVal.toFixed(0)}</span>
+            </div>
+            
+            {/* Grid Lines */}
+            <div className="absolute left-14 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
+              {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
+            </div>
+            
+            {/* X-Axis */}
+            <div className="absolute left-14 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
+              <span>{chartProps.labels[0]}</span>
+              <span className="translate-x-1/2 hidden sm:block">{chartProps.labels[1]}</span>
+              <span>{chartProps.labels[2]}</span>
+            </div>
+
+            {/* Render Contextual Tooltip if Hovered */}
+            {hoveredTrade && (
+               <div 
+                 className="absolute z-50 bg-[#0a1128]/95 backdrop-blur-md border border-[#1e3a8a]/50 p-3 rounded-xl shadow-2xl pointer-events-none transition-all duration-200"
+                 style={{ 
+                    left: `calc(3.5rem + ${hoveredTrade.x}%)`, 
+                    top: `${hoveredTrade.y}%`,
+                    transform: 'translate(-50%, -120%)'
+                 }}
+               >
+                 <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1 flex items-center gap-1.5">
+                   {hoveredTrade.type === 'BUY' ? <TrendingUp size={12} className="text-emerald-400" /> : <TrendingDown size={12} className="text-rose-400" />}
+                   {hoveredTrade.type} by {hoveredTrade.title}
+                 </p>
+                 <p className="text-sm font-bold text-white mb-0.5">{hoveredTrade.insider_name}</p>
+                 <div className="flex gap-4 mt-2">
+                   <div>
+                     <p className="text-[9px] text-slate-500 uppercase">Value</p>
+                     <p className={`font-medium ${hoveredTrade.type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>${hoveredTrade.total_value.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                   </div>
+                   <div>
+                     <p className="text-[9px] text-slate-500 uppercase">Shares @ Price</p>
+                     <p className="font-medium text-slate-300">{hoveredTrade.shares.toLocaleString()} @ ${hoveredTrade.price.toFixed(2)}</p>
+                   </div>
+                 </div>
+               </div>
+            )}
+
+            {/* The actual SVG Chart */}
+            <div className="absolute left-14 right-0 top-0 bottom-6">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                <defs>
+                  <linearGradient id="insider-chart-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" /><stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                
+                {/* Target Line */}
+                <path d={chartProps.targetPath} fill="none" stroke="#64748b" strokeOpacity="0.8" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                
+                {/* Price Line */}
+                <path d={`${chartProps.pricePath} L 100 100 L 0 100 Z`} fill="url(#insider-chart-grad)" />
+                <path d={chartProps.pricePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+                
+                {/* Insider Event Pins */}
+                {chartProps.plottedTrades.map((trade) => (
+                  <g 
+                    key={trade.id} 
+                    className="cursor-crosshair group outline-none"
+                    onMouseEnter={() => setHoveredTrade(trade)}
+                    onMouseLeave={() => setHoveredTrade(null)}
+                  >
+                    {trade.isMassive && trade.type === 'BUY' && (
+                       <circle cx={trade.x} cy={trade.y} r={trade.r * 2.5} fill="#10b981" opacity="0.2" className="animate-ping" vectorEffect="non-scaling-stroke" />
+                    )}
+                    <circle 
+                      cx={trade.x} cy={trade.y} r={trade.r} 
+                      fill={trade.type === 'BUY' ? '#10b981' : '#f43f5e'} 
+                      stroke={trade.type === 'BUY' ? '#064e3b' : '#881337'} 
+                      strokeWidth="0.5" 
+                      opacity={trade.type === 'BUY' ? "1" : "0.5"}
+                      vectorEffect="non-scaling-stroke" 
+                      className="transition-all duration-300 group-hover:stroke-white group-hover:stroke-1"
+                    />
+                  </g>
+                ))}
+              </svg>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-slate-500">Not enough history loaded for {selectedTicker}.</div>
+        )}
+      </div>
+
+      {/* Discovery Engine Dock (Ranked Scans) */}
+      <div className="pt-6 border-t border-[#2d254f]/50">
+        <div className="flex items-center gap-2 mb-4">
+          <Star size={18} className="text-amber-400" />
+          <h3 className="text-lg font-serif font-medium text-slate-200 tracking-wide">SEC Discovery Engine</h3>
+          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full ml-2">Top Form 4 Convictions</span>
+        </div>
+        
+        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+          {topOpportunities.map((opp) => (
+            <button 
+              key={opp.ticker}
+              onClick={() => setSelectedTicker(opp.ticker)}
+              className={`shrink-0 flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 min-w-[220px] ${selectedTicker === opp.ticker ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'bg-[#111c38]/60 border-[#1e3a8a]/30 hover:border-[#1e3a8a]/80 hover:bg-[#16254a]'}`}
+            >
+              <div className="flex justify-between w-full items-center mb-3">
+                <span className={`text-xl font-bold ${selectedTicker === opp.ticker ? 'text-white' : 'text-slate-200'}`}>{opp.ticker}</span>
+                <div className="flex flex-col items-end">
+                  <span className={`text-lg font-black ${opp.conviction_score > 75 ? 'text-emerald-400' : 'text-amber-400'}`}>{opp.conviction_score}</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Conviction</span>
+                </div>
+              </div>
+              
+              <div className="w-full flex items-center gap-2 text-xs text-slate-400">
+                <DollarSign size={14} className="text-emerald-500/70" />
+                <span>{opp.insider_transactions.filter(t => t.type==='BUY').length} Executed Buys</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      
     </div>
   );
 }

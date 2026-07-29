@@ -204,6 +204,7 @@ export default function App() {
           console.warn("No insider data found yet.");
         }
 
+        // Process Stocks
         const groupedByTicker = {};
         allParsedData.forEach(row => {
           const ticker = row.Ticker;
@@ -496,11 +497,13 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
   const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...watchList])], [savedStocks, watchList]);
 
+  // Extract available macro columns (ignore Date)
   const availableMacros = useMemo(() => {
     if (!macroData || macroData.length === 0) return [];
     return Object.keys(macroData[0]).filter(k => k !== 'Date' && k !== 'index').sort();
   }, [macroData]);
 
+  // Fetch saved plays from S3 on load
   useEffect(() => {
     const fetchSavedPlays = async () => {
       try {
@@ -516,6 +519,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     fetchSavedPlays();
   }, []);
 
+  // Auto-select defaults
   useEffect(() => {
     if (combinedAssets.length > 0 && !selectedTicker) setSelectedTicker(combinedAssets[0]);
     if (availableMacros.length > 0 && !selectedMacro) {
@@ -526,9 +530,11 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
   const stock = data.find(s => s.t === selectedTicker);
   
+  // Align the Data with Time Lag Math
   const alignedData = useMemo(() => {
     if (!stock || !stock.history || macroData.length === 0 || !selectedMacro) return [];
     
+    // Create a dictionary of macro dates for O(1) lookup
     const macroDict = {};
     macroData.forEach(row => {
       macroDict[row.Date] = row[selectedMacro];
@@ -544,6 +550,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
+    // Helper to shift date backward by X months safely
     const getLaggedDateStr = (dateStr, months) => {
       if (months === 0) return dateStr;
       const [y, m, d] = dateStr.split('-');
@@ -559,12 +566,13 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     stock.history.forEach(record => {
       const recDate = new Date(record.Date);
       if (recDate >= cutoff) {
+        // Shift the macro lookup date backward in time to test for leading indicators
         const targetDateStr = getLaggedDateStr(record.Date, lagMonths);
         const macroVal = macroDict[targetDateStr];
         
         if (macroVal !== undefined && macroVal !== null) {
           merged.push({
-            date: record.Date, 
+            date: record.Date, // Keep true stock date for the x-axis alignment
             price: record.Close_Price,
             macro: macroVal
           });
@@ -575,6 +583,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     return merged;
   }, [stock, macroData, selectedMacro, timeframe, lagMonths]);
 
+  // Math & SVG Generation
   const chartProps = useMemo(() => {
     if (alignedData.length === 0) return null;
 
@@ -600,6 +609,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
     const correlation = getPearsonCorrelation(prices, macros);
     
+    // Labels
     const start = new Date(alignedData[0].date);
     const end = new Date(alignedData[alignedData.length - 1].date);
     const mid = new Date(start.getTime() + (end.getTime() - start.getTime()) / 2);
@@ -627,10 +637,11 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
       ticker: selectedTicker, 
       macro: selectedMacro, 
       timeframe: timeframe,
-      lag: lagMonths, 
-      correlation: chartProps.correlation 
+      lag: lagMonths, // Save the specific lag setting
+      correlation: chartProps.correlation // Hard-save the exact correlation math
     };
     
+    // Prevent exact duplicates
     if (savedPlays.some(p => p.ticker === newPlay.ticker && p.macro === newPlay.macro && p.timeframe === newPlay.timeframe && p.lag === newPlay.lag)) {
       setIsSaving(false);
       return;
@@ -737,6 +748,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                       <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
                     ))}
                   </div>
+                  {/* The new Lag Feature Control UI */}
                   <div className="flex bg-[#07050f]/60 border border-amber-500/30 rounded-xl p-1 w-fit shadow-inner">
                     {[0, 1, 2, 3, 4, 5, 6].map(m => (
                       <button 
@@ -758,28 +770,33 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
             </div>
 
             <div className="relative flex-1 w-full min-h-[350px] mt-2">
+              {/* Left Y-Axis (Stock Price) */}
               <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-amber-500/70 font-medium text-right pr-2 border-r border-[#2d254f]/50 z-10">
                 <span>${chartProps.pMax.toFixed(2)}</span>
                 <span>${((chartProps.pMax + chartProps.pMin) / 2).toFixed(2)}</span>
                 <span>${chartProps.pMin.toFixed(2)}</span>
               </div>
               
+              {/* Right Y-Axis (Macro Metric) */}
               <div className="absolute right-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-blue-400/70 font-medium text-left pl-2 border-l border-[#2d254f]/50 z-10">
                 <span>{chartProps.mMax.toFixed(2)}</span>
                 <span>{((chartProps.mMax + chartProps.mMin) / 2).toFixed(2)}</span>
                 <span>{chartProps.mMin.toFixed(2)}</span>
               </div>
 
+              {/* Grid Lines */}
               <div className="absolute left-14 right-14 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
                 {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
               </div>
               
+              {/* X-Axis Labels */}
               <div className="absolute left-14 right-14 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
                 <span>{chartProps.labels[0]}</span>
                 <span className="translate-x-1/2 hidden sm:block">{chartProps.labels[1]}</span>
                 <span>{chartProps.labels[2]}</span>
               </div>
 
+              {/* SVG Charts */}
               <div className="absolute left-14 right-14 top-0 bottom-6">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                   <path d={chartProps.macroPath} fill="none" stroke="#3b82f6" strokeOpacity="0.8" strokeWidth="2" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
@@ -916,6 +933,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                   {play.macro.replace(/_/g, ' ')}
                 </div>
 
+                {/* Prominent Correlation Display */}
                 <div className="absolute top-4 right-4 text-right">
                   <div className={`text-xl font-bold ${
                     play.correlation > 0.5 ? 'text-emerald-400' :
@@ -931,6 +949,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                     <span className="font-bold text-slate-300 bg-[#07050f]/60 px-2 py-1 rounded-md border border-[#1e3a8a]/30">
                       {play.timeframe || '180D'} View
                     </span>
+                    {/* Render the specific Lag configuration if it exists */}
                     {play.lag > 0 && (
                       <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/30">
                         {play.lag}M Lag
@@ -1311,9 +1330,14 @@ function PortfolioTracker({ watchList, toggleWatchList, data }) {
 }
 
 // ==========================================
-// DASHBOARD HOME
+// DASHBOARD HOME COMPONENT
 // ==========================================
+
 function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], toggleSaved }) {
+  const [trendFilter, setTrendFilter] = useState('All');
+  const [sectorFilter, setSectorFilter] = useState('All');
+  const [timeframe, setTimeframe] = useState('30D');
+
   const assetBreakdown = useMemo(() => {
     if (!data || data.length === 0) return null;
     const counts = {};
@@ -1322,6 +1346,11 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
       counts[idx] = (counts[idx] || 0) + 1;
     });
     return Object.entries(counts).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+  }, [data]);
+
+  const availableSectors = useMemo(() => {
+    const sectors = new Set(data.map(d => d.sec).filter(Boolean));
+    return ['All', ...Array.from(sectors).sort()];
   }, [data]);
 
   const anomalies = useMemo(() => {
@@ -1366,18 +1395,10 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
     return scores;
   }, [sentiment]);
 
-  const [trendFilter, setTrendFilter] = useState('All');
-  const [timeframe, setTimeframe] = useState('30D');
+  // Aggregate Market Price vs Target Time Series
+  const marketTrendData = useMemo(() => {
+    if (!data || data.length === 0) return null;
 
-  const trendData = useMemo(() => {
-    const BAR_COUNT = 30;
-    
-    if (!data || data.length === 0) {
-      return Array(BAR_COUNT).fill({ height: 5, rawVolume: 0, colorFrom: 'from-blue-900/40', colorTo: 'to-blue-400/30', hoverFrom: 'hover:from-blue-600/50', hoverTo: 'hover:to-blue-300/50', border: 'border-blue-400/40' });
-    }
-    
-    const bucketedData = Array(BAR_COUNT).fill(0);
-    
     let days = 30;
     if (timeframe === '60D') days = 60;
     if (timeframe === '90D') days = 90;
@@ -1385,79 +1406,83 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
     if (timeframe === '1Y') days = 365;
     if (timeframe === 'MAX') days = 1800;
 
-    const endTime = new Date().getTime();
-    const startTime = endTime - (days * 24 * 60 * 60 * 1000);
-    const timeSpan = endTime - startTime || 1;
+    // Collect matching records by date
+    const dateAggregates = {};
 
     data.forEach(stock => {
       if (trendFilter !== 'All' && stock.idx !== trendFilter) return;
+      if (sectorFilter !== 'All' && stock.sec !== sectorFilter) return;
 
       (stock.history || []).forEach(record => {
-        if (!record.Date) return;
-        
-        const parts = record.Date.split('-');
-        if (parts.length !== 3) return;
-        const recTime = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
-        
-        if (!isNaN(recTime) && recTime >= startTime && recTime <= endTime) {
-          let bucketIdx = Math.floor(((recTime - startTime) / timeSpan) * BAR_COUNT);
-          
-          if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
-          if (bucketIdx < 0) bucketIdx = 0;
-          
-          const cleanVol = String(record.Volume).replace(/,/g, '');
-          bucketedData[bucketIdx] += (Number(cleanVol) || 0);
+        const rawDate = record.Date || record.date || record['Unnamed: 0'];
+        if (!rawDate) return;
+
+        const closeP = Number(record.close || record.Close_Price) || 0;
+        const targetP = Number(record.target_mean || record.Target_Mean_Price) || closeP;
+
+        if (closeP > 0) {
+          if (!dateAggregates[rawDate]) {
+            dateAggregates[rawDate] = { sumClose: 0, sumTarget: 0, count: 0 };
+          }
+          dateAggregates[rawDate].sumClose += closeP;
+          dateAggregates[rawDate].sumTarget += targetP;
+          dateAggregates[rawDate].count += 1;
         }
       });
     });
 
-    const maxVol = Math.max(...bucketedData, 1); 
-    
-    const applyTheme = (v, cFrom, cTo, hFrom, hTo, bColor) => ({
-      height: Math.max(5, (v / maxVol) * 100), 
-      rawVolume: v,
-      colorFrom: cFrom, colorTo: cTo, hoverFrom: hFrom, hoverTo: hTo, border: bColor
+    const sortedDates = Object.keys(dateAggregates).sort((a, b) => new Date(a) - new Date(b));
+    if (sortedDates.length === 0) return null;
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const filteredDates = sortedDates.filter(d => new Date(d) >= cutoffDate);
+    const datesToUse = filteredDates.length > 1 ? filteredDates : sortedDates;
+
+    const series = datesToUse.map(d => {
+      const item = dateAggregates[d];
+      return {
+        date: d,
+        avgClose: item.sumClose / item.count,
+        avgTarget: item.sumTarget / item.count,
+      };
     });
 
-    if (trendFilter === 'S&P 500') return bucketedData.map(v => applyTheme(v, 'from-blue-900/40', 'to-blue-400/30', 'hover:from-blue-600/50', 'hover:to-blue-300/50', 'border-blue-400/40'));
-    if (trendFilter === 'S&P 400') return bucketedData.map(v => applyTheme(v, 'from-emerald-900/40', 'to-emerald-400/30', 'hover:from-emerald-600/50', 'hover:to-emerald-300/50', 'border-emerald-400/40'));
-    if (trendFilter === 'S&P 600') return bucketedData.map(v => applyTheme(v, 'from-amber-900/40', 'to-amber-400/30', 'hover:from-amber-600/50', 'hover:to-amber-300/50', 'border-amber-400/40'));
-    if (trendFilter === 'TSX') return bucketedData.map(v => applyTheme(v, 'from-rose-900/40', 'to-rose-400/30', 'hover:from-rose-600/50', 'hover:to-rose-300/50', 'border-rose-400/40'));
-    return bucketedData.map(v => applyTheme(v, 'from-purple-900/40', 'to-indigo-400/30', 'hover:from-purple-600/50', 'hover:to-indigo-300/50', 'border-indigo-400/40'));
+    const avgCloses = series.map(s => s.avgClose);
+    const avgTargets = series.map(s => s.avgTarget);
+    const allVals = [...avgCloses, ...avgTargets];
 
-  }, [data, trendFilter, timeframe]);
+    const minVal = Math.min(...allVals) * 0.95;
+    const maxVal = Math.max(...allVals) * 1.05;
 
-  const maxRawVolume = useMemo(() => {
-    if (!trendData || trendData.length === 0) return 0;
-    return Math.max(...trendData.map(d => d.rawVolume || 0));
-  }, [trendData]);
+    const toPath = (key) => series.map((s, i) => {
+      const x = (i / Math.max(1, series.length - 1)) * 100;
+      const y = 100 - ((s[key] - minVal) / Math.max(0.001, maxVal - minVal)) * 100;
+      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(' ');
 
-  const formatVol = (num) => {
-    if (num === 0) return '0';
-    if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
-    if (num >= 1e6) return (num / 1e6).toFixed(0) + 'M';
-    if (num >= 1e3) return (num / 1e3).toFixed(0) + 'K';
-    return num.toLocaleString();
-  };
+    const currentClose = series[series.length - 1].avgClose;
+    const currentTarget = series[series.length - 1].avgTarget;
+    const aggregateUpside = currentClose > 0 ? ((currentTarget - currentClose) / currentClose) * 100 : 0;
 
-  const axisLabels = useMemo(() => {
-    const today = new Date();
-    const start = new Date();
-    let days = 30;
-    if (timeframe === '60D') days = 60;
-    if (timeframe === '90D') days = 90;
-    if (timeframe === '180D') days = 180;
-    if (timeframe === '1Y') days = 360;
-    if (timeframe === 'MAX') days = 1800; 
-    start.setDate(today.getDate() - days);
-    const mid = new Date(start.getTime() + (today.getTime() - start.getTime()) / 2);
-    const formatDt = (d) => {
-      const opts = { month: 'short', day: 'numeric' };
-      if (timeframe === '1Y' || timeframe === 'MAX') opts.year = '2-digit';
-      return d.toLocaleDateString('en-US', opts);
+    const startDt = new Date(series[0].date);
+    const endDt = new Date(series[series.length - 1].date);
+    const midDt = new Date(startDt.getTime() + (endDt.getTime() - startDt.getTime()) / 2);
+
+    const formatDt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: timeframe === '1Y' || timeframe === 'MAX' ? '2-digit' : undefined });
+
+    return {
+      pricePath: toPath('avgClose'),
+      targetPath: toPath('avgTarget'),
+      minVal,
+      maxVal,
+      currentClose,
+      currentTarget,
+      aggregateUpside,
+      labels: [formatDt(startDt), formatDt(midDt), 'Today']
     };
-    return [formatDt(start), formatDt(mid), 'Today'];
-  }, [timeframe]);
+  }, [data, trendFilter, sectorFilter, timeframe]);
 
   return (
     <div className="space-y-6 max-w-7xl animate-slide-up" style={{ animationDuration: '0.3s' }}>
@@ -1477,47 +1502,87 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* REPURPOSED: Market Price vs Target Valuation Gap Chart */}
         <div className="lg:col-span-2 bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 relative overflow-hidden group flex flex-col">
           <div className="flex flex-col xl:flex-row justify-between xl:items-start mb-6 relative z-10 gap-4">
             <div>
-              <h2 className="text-xl font-serif font-medium text-amber-50/90 tracking-wide drop-shadow-sm">Market Volume Trends</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-serif font-medium text-amber-50/90 tracking-wide drop-shadow-sm">Group Valuation & Target Trends</h2>
+                {marketTrendData && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${marketTrendData.aggregateUpside >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                    Avg Target Gap: {marketTrendData.aggregateUpside >= 0 ? '+' : ''}{marketTrendData.aggregateUpside.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Comparing Average Stock Price vs. Analyst Consensus Mean Target across selected group</p>
+              
               <div className="flex bg-[#07050f]/60 border border-[#2d254f]/80 rounded-xl p-1 mt-3 w-fit shadow-inner">
                 {['30D', '60D', '90D', '180D', '1Y', 'MAX'].map(tf => (
                   <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
                 ))}
               </div>
             </div>
-            <select className="bg-[#07050f]/80 border border-[#2d254f]/80 rounded-xl px-4 py-2 text-sm focus:outline-none text-slate-300 backdrop-blur-md cursor-pointer shadow-inner" value={trendFilter} onChange={(e) => setTrendFilter(e.target.value)}>
-              <option value="All">All Markets</option>
-              <option value="S&P 500">S&P 500</option>
-              <option value="S&P 400">S&P 400 MidCap</option>
-              <option value="S&P 600">S&P 600 SmallCap</option>
-              <option value="TSX">TSX Composite</option>
-            </select>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <select className="bg-[#07050f]/80 border border-[#2d254f]/80 rounded-xl px-3 py-2 text-xs focus:outline-none text-slate-300 backdrop-blur-md cursor-pointer shadow-inner" value={trendFilter} onChange={(e) => setTrendFilter(e.target.value)}>
+                <option value="All">All Markets</option>
+                <option value="S&P 500">S&P 500</option>
+                <option value="S&P 400">S&P 400 MidCap</option>
+                <option value="S&P 600">S&P 600 SmallCap</option>
+                <option value="TSX">TSX Composite</option>
+              </select>
+
+              <select className="bg-[#07050f]/80 border border-[#2d254f]/80 rounded-xl px-3 py-2 text-xs focus:outline-none text-slate-300 backdrop-blur-md cursor-pointer shadow-inner" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
+                {availableSectors.map(sec => <option key={sec} value={sec}>{sec === 'All' ? 'All Sectors' : sec}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-6 text-xs font-medium mb-3 mr-2">
+            <div className="flex items-center gap-2 text-blue-400"><div className="w-3 h-0.5 bg-blue-500"></div> Avg Group Price</div>
+            <div className="flex items-center gap-2 text-emerald-400"><div className="w-3 h-0.5 border-t border-dashed border-emerald-500"></div> Analyst Mean Target</div>
           </div>
           
           <div className="relative flex-1 w-full mt-2 flex pb-6 pl-12 min-h-[220px]">
-            <div className="absolute left-0 top-0 bottom-6 w-10 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
-              <span>{formatVol(maxRawVolume)}</span>
-              <span>{formatVol(maxRawVolume * 0.75)}</span>
-              <span>{formatVol(maxRawVolume * 0.5)}</span>
-              <span>{formatVol(maxRawVolume * 0.25)}</span>
-              <span>0</span>
-            </div>
-            <div className="absolute left-12 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
-              {[...Array(5)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
-            </div>
-            <div className="absolute left-12 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
-              <span>{axisLabels[0]}</span><span className="translate-x-1/2 hidden sm:block">{axisLabels[1]}</span><span>{axisLabels[2]}</span>
-            </div>
-            <div className="h-full w-full flex items-end space-x-1 sm:space-x-2 relative z-10 pt-4">
-              {trendData.map((item, i) => (
-                <div key={i} className={`flex-1 bg-gradient-to-t ${item.colorFrom} ${item.colorTo} rounded-t-md border-t ${item.border} ${item.hoverFrom} ${item.hoverTo} transition-all duration-300 cursor-pointer relative group`} style={{ height: `${item.height}%` }}></div>
-              ))}
-            </div>
+            {marketTrendData ? (
+              <>
+                <div className="absolute left-0 top-0 bottom-6 w-10 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
+                  <span>${marketTrendData.maxVal.toFixed(0)}</span>
+                  <span>${((marketTrendData.maxVal + marketTrendData.minVal) / 2).toFixed(0)}</span>
+                  <span>${marketTrendData.minVal.toFixed(0)}</span>
+                </div>
+                <div className="absolute left-12 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
+                  {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
+                </div>
+                <div className="absolute left-12 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
+                  <span>{marketTrendData.labels[0]}</span>
+                  <span className="translate-x-1/2 hidden sm:block">{marketTrendData.labels[1]}</span>
+                  <span>{marketTrendData.labels[2]}</span>
+                </div>
+                
+                <div className="absolute left-12 right-0 top-0 bottom-6">
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                    <defs>
+                      <linearGradient id="group-trend-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={marketTrendData.targetPath} fill="none" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                    <path d={`${marketTrendData.pricePath} L 100 100 L 0 100 Z`} fill="url(#group-trend-grad)" />
+                    <path d={marketTrendData.pricePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+                  </svg>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center w-full text-slate-500 text-sm">
+                No matching price history found for this specific filter combination.
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Anomaly Alerts Box */}
         <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-serif font-medium text-amber-50/90 tracking-wide drop-shadow-sm">Anomaly Alerts</h2>
@@ -1558,9 +1623,6 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
   );
 }
 
-// ==========================================
-// SCREENER
-// ==========================================
 function MacroScreener({ data, savedStocks, toggleSaved }) {
   const [filterIndex, setFilterIndex] = useState('All');
   const [minUpside, setMinUpside] = useState(10);
@@ -1769,9 +1831,6 @@ function MetricCard({ title, value, subtitle, trend, highlight, alert, breakdown
   );
 }
 
-// ==========================================
-// TARGET ANALYSIS
-// ==========================================
 function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [timeframe, setTimeframe] = useState('30D');
@@ -1935,7 +1994,7 @@ function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
               <span>${maxVal.toFixed(0)}</span><span>${((maxVal + minVal) / 2).toFixed(0)}</span><span>${minVal.toFixed(0)}</span>
             </div>
             <div className="absolute left-14 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
-              {[...Array(3)].map((_, i) => <div className="border-t border-[#2d254f]/30 w-full h-0" key={i}></div>)}
+              {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
             </div>
             <div className="absolute left-14 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
               <span>{axisLabels[0]}</span><span className="translate-x-1/2 hidden sm:block">{axisLabels[1]}</span><span>{axisLabels[2]}</span>
@@ -1987,9 +2046,6 @@ function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
   );
 }
 
-// ==========================================
-// AI NEWS ENGINE
-// ==========================================
 function AINewsEngine({ savedStocks, watchList, data }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -2139,7 +2195,7 @@ function AINewsEngine({ savedStocks, watchList, data }) {
             
             <div className="relative z-10">
               <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2">
-                 Institutional Thesis Verdict
+                Institutional Thesis Verdict
               </p>
               <h2 className={`text-4xl font-bold tracking-tight mb-2 ${
                 reportData.verdict === 'Temporary Overreaction' ? 'text-emerald-400' : 
@@ -2286,6 +2342,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
   const stock = data.find(s => s.t === selectedTicker);
   const history = stock ? (stock.history || []) : [];
   
+  // Isolate the transactions
   const transactions = currentOpportunity.insider_transactions || [];
   
   const filteredHistory = useMemo(() => {
@@ -2311,6 +2368,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     const targets = displayHistory.map(r => r.Target_Mean_Price || r.Close_Price);
     
     const allVals = [...prices, ...targets];
+    // Include the transaction prices in the bounds to make sure pins don't fall off the chart
     transactions.forEach(t => {
        if (t.price > 0) allVals.push(t.price);
     });
@@ -2333,13 +2391,16 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     const endDt = new Date(displayHistory[displayHistory.length - 1].Date);
     const totalSpan = endDt.getTime() - startDt.getTime();
 
+    // Calculate exact X/Y coordinates for each transaction dot
     const plottedTrades = transactions.map((trade, i) => {
       const tradeDt = new Date(trade.date);
+      // Filter out trades outside our current view
       if (tradeDt < startDt || tradeDt > endDt) return null;
       
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
       const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
       
+      // Determine dot size by transaction value (Log scale base to prevent massive circles)
       let radius = 1.5;
       if (trade.total_value > 100000) radius = 2;
       if (trade.total_value > 500000) radius = 3;
@@ -2357,6 +2418,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     };
   }, [displayHistory, transactions, timeframe]);
 
+  // Total accumulation stats
   const aggregateStats = useMemo(() => {
     let totalBought = 0;
     let highConvictionBuyers = new Set();
@@ -2372,6 +2434,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
   return (
     <div className="max-w-7xl space-y-6 animate-slide-up" style={{ animationDuration: '0.3s' }}>
       
+      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between md:items-center bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 p-6 rounded-3xl shadow-xl shadow-black/40 gap-4">
         <div>
            <div className="flex items-center gap-3 mb-1">
@@ -2398,6 +2461,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         </div>
       </div>
 
+      {/* Main Graph Overlay */}
       <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 flex flex-col min-h-[450px]">
         <div className="flex flex-col xl:flex-row justify-between xl:items-start mb-6 gap-4">
           <div>
@@ -2421,22 +2485,26 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         {chartProps ? (
           <div className="relative flex-1 w-full min-h-[300px] mt-2 group">
             
+            {/* Y-Axis */}
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
               <span>${chartProps.maxVal.toFixed(0)}</span>
               <span>${((chartProps.maxVal + chartProps.minVal) / 2).toFixed(0)}</span>
               <span>${chartProps.minVal.toFixed(0)}</span>
             </div>
             
+            {/* Grid Lines */}
             <div className="absolute left-14 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
               {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
             </div>
             
+            {/* X-Axis */}
             <div className="absolute left-14 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
               <span>{chartProps.labels[0]}</span>
               <span className="translate-x-1/2 hidden sm:block">{chartProps.labels[1]}</span>
               <span>{chartProps.labels[2]}</span>
             </div>
 
+            {/* Render Contextual Tooltip if Hovered */}
             {hoveredTrade && (
                <div 
                  className="absolute z-50 bg-[#0a1128]/95 backdrop-blur-md border border-[#1e3a8a]/50 p-3 rounded-xl shadow-2xl pointer-events-none transition-all duration-200"
@@ -2464,6 +2532,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
                </div>
             )}
 
+            {/* The actual SVG Chart */}
             <div className="absolute left-14 right-0 top-0 bottom-6">
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                 <defs>
@@ -2472,11 +2541,14 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
                   </linearGradient>
                 </defs>
                 
+                {/* Target Line */}
                 <path d={chartProps.targetPath} fill="none" stroke="#64748b" strokeOpacity="0.8" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
                 
+                {/* Price Line */}
                 <path d={`${chartProps.pricePath} L 100 100 L 0 100 Z`} fill="url(#insider-chart-grad)" />
                 <path d={chartProps.pricePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
                 
+                {/* Insider Event Pins */}
                 {chartProps.plottedTrades.map((trade) => (
                   <g 
                     key={trade.id} 
@@ -2506,6 +2578,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         )}
       </div>
 
+      {/* Discovery Engine Dock (Ranked Scans) */}
       <div className="pt-6 border-t border-[#2d254f]/50">
         <div className="flex items-center gap-2 mb-4">
           <Star size={18} className="text-amber-400" />

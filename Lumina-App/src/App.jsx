@@ -51,7 +51,7 @@ const parseCSV = (csvText) => {
   const lines = cleanText.trim().split('\n');
   if (lines.length < 2) return [];
   
-  // Strip hidden UTF-8 BOM characters that break the 'Date' header
+  // CRITICAL FIX: The `replace(/^\uFEFF/, '')` strips the invisible BOM character from AWS files!
   const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').replace(/^\uFEFF/, '').trim());
   const results = [];
   
@@ -193,7 +193,6 @@ export default function App() {
           console.warn("No insider data found yet.");
         }
 
-        // Process Stocks
         const groupedByTicker = {};
         allParsedData.forEach(row => {
           const ticker = row.Ticker;
@@ -478,7 +477,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [selectedMacro, setSelectedMacro] = useState('');
   const [timeframe, setTimeframe] = useState('180D');
-  const [lagMonths, setLagMonths] = useState(0); // NEW: Time Lag State
+  const [lagMonths, setLagMonths] = useState(0); 
   
   const [savedPlays, setSavedPlays] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -486,13 +485,11 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
   const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...watchList])], [savedStocks, watchList]);
 
-  // Extract available macro columns (ignore Date)
   const availableMacros = useMemo(() => {
     if (!macroData || macroData.length === 0) return [];
     return Object.keys(macroData[0]).filter(k => k !== 'Date' && k !== 'index').sort();
   }, [macroData]);
 
-  // Fetch saved plays from S3 on load
   useEffect(() => {
     const fetchSavedPlays = async () => {
       try {
@@ -508,7 +505,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     fetchSavedPlays();
   }, []);
 
-  // Auto-select defaults
   useEffect(() => {
     if (combinedAssets.length > 0 && !selectedTicker) setSelectedTicker(combinedAssets[0]);
     if (availableMacros.length > 0 && !selectedMacro) {
@@ -519,11 +515,9 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
   const stock = data.find(s => s.t === selectedTicker);
   
-  // Align the Data with Time Lag Math
   const alignedData = useMemo(() => {
     if (!stock || !stock.history || macroData.length === 0 || !selectedMacro) return [];
     
-    // Create a dictionary of macro dates for O(1) lookup
     const macroDict = {};
     macroData.forEach(row => {
       macroDict[row.Date] = row[selectedMacro];
@@ -539,7 +533,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
-    // Helper to shift date backward by X months safely
     const getLaggedDateStr = (dateStr, months) => {
       if (months === 0) return dateStr;
       const [y, m, d] = dateStr.split('-');
@@ -555,13 +548,12 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     stock.history.forEach(record => {
       const recDate = new Date(record.Date);
       if (recDate >= cutoff) {
-        // Shift the macro lookup date backward in time to test for leading indicators
         const targetDateStr = getLaggedDateStr(record.Date, lagMonths);
         const macroVal = macroDict[targetDateStr];
         
         if (macroVal !== undefined && macroVal !== null) {
           merged.push({
-            date: record.Date, // Keep true stock date for the x-axis alignment
+            date: record.Date, 
             price: record.Close_Price,
             macro: macroVal
           });
@@ -572,7 +564,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     return merged;
   }, [stock, macroData, selectedMacro, timeframe, lagMonths]);
 
-  // Math & SVG Generation
   const chartProps = useMemo(() => {
     if (alignedData.length === 0) return null;
 
@@ -598,7 +589,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
 
     const correlation = getPearsonCorrelation(prices, macros);
     
-    // Labels
     const start = new Date(alignedData[0].date);
     const end = new Date(alignedData[alignedData.length - 1].date);
     const mid = new Date(start.getTime() + (end.getTime() - start.getTime()) / 2);
@@ -626,11 +616,10 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
       ticker: selectedTicker, 
       macro: selectedMacro, 
       timeframe: timeframe,
-      lag: lagMonths, // Save the specific lag setting
-      correlation: chartProps.correlation // Hard-save the exact correlation math
+      lag: lagMonths, 
+      correlation: chartProps.correlation 
     };
     
-    // Prevent exact duplicates
     if (savedPlays.some(p => p.ticker === newPlay.ticker && p.macro === newPlay.macro && p.timeframe === newPlay.timeframe && p.lag === newPlay.lag)) {
       setIsSaving(false);
       return;
@@ -737,7 +726,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                       <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
                     ))}
                   </div>
-                  {/* The new Lag Feature Control UI */}
                   <div className="flex bg-[#07050f]/60 border border-amber-500/30 rounded-xl p-1 w-fit shadow-inner">
                     {[0, 1, 2, 3, 4, 5, 6].map(m => (
                       <button 
@@ -759,33 +747,28 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
             </div>
 
             <div className="relative flex-1 w-full min-h-[350px] mt-2">
-              {/* Left Y-Axis (Stock Price) */}
               <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-amber-500/70 font-medium text-right pr-2 border-r border-[#2d254f]/50 z-10">
                 <span>${chartProps.pMax.toFixed(2)}</span>
                 <span>${((chartProps.pMax + chartProps.pMin) / 2).toFixed(2)}</span>
                 <span>${chartProps.pMin.toFixed(2)}</span>
               </div>
               
-              {/* Right Y-Axis (Macro Metric) */}
               <div className="absolute right-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-blue-400/70 font-medium text-left pl-2 border-l border-[#2d254f]/50 z-10">
                 <span>{chartProps.mMax.toFixed(2)}</span>
                 <span>{((chartProps.mMax + chartProps.mMin) / 2).toFixed(2)}</span>
                 <span>{chartProps.mMin.toFixed(2)}</span>
               </div>
 
-              {/* Grid Lines */}
               <div className="absolute left-14 right-14 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
                 {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
               </div>
               
-              {/* X-Axis Labels */}
               <div className="absolute left-14 right-14 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
                 <span>{chartProps.labels[0]}</span>
                 <span className="translate-x-1/2 hidden sm:block">{chartProps.labels[1]}</span>
                 <span>{chartProps.labels[2]}</span>
               </div>
 
-              {/* SVG Charts */}
               <div className="absolute left-14 right-14 top-0 bottom-6">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                   <path d={chartProps.macroPath} fill="none" stroke="#3b82f6" strokeOpacity="0.8" strokeWidth="2" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
@@ -922,7 +905,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                   {play.macro.replace(/_/g, ' ')}
                 </div>
 
-                {/* Prominent Correlation Display */}
                 <div className="absolute top-4 right-4 text-right">
                   <div className={`text-xl font-bold ${
                     play.correlation > 0.5 ? 'text-emerald-400' :
@@ -938,7 +920,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                     <span className="font-bold text-slate-300 bg-[#07050f]/60 px-2 py-1 rounded-md border border-[#1e3a8a]/30">
                       {play.timeframe || '180D'} View
                     </span>
-                    {/* Render the specific Lag configuration if it exists */}
                     {play.lag > 0 && (
                       <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/30">
                         {play.lag}M Lag
@@ -1319,7 +1300,7 @@ function PortfolioTracker({ watchList, toggleWatchList, data }) {
 }
 
 // ==========================================
-// EXISTING COMPONENTS (HOME, SCREENER, NEWS, ETC)
+// DASHBOARD HOME
 // ==========================================
 function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], toggleSaved }) {
   const assetBreakdown = useMemo(() => {
@@ -1380,14 +1361,12 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
   const trendData = useMemo(() => {
     const BAR_COUNT = 30;
     
-    // Provide a safe default state while loading
     if (!data || data.length === 0) {
       return Array(BAR_COUNT).fill({ height: 5, rawVolume: 0, colorFrom: 'from-blue-900/40', colorTo: 'to-blue-400/30', hoverFrom: 'hover:from-blue-600/50', hoverTo: 'hover:to-blue-300/50', border: 'border-blue-400/40' });
     }
     
     const bucketedData = Array(BAR_COUNT).fill(0);
     
-    // 1. Establish the strict mathematical boundaries for the selected timeframe
     let days = 30;
     if (timeframe === '60D') days = 60;
     if (timeframe === '90D') days = 90;
@@ -1397,37 +1376,34 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
 
     const endTime = new Date().getTime();
     const startTime = endTime - (days * 24 * 60 * 60 * 1000);
-    const timeSpan = endTime - startTime;
+    const timeSpan = endTime - startTime || 1;
 
-    // 2. Loop through every asset and aggregate volume cleanly into the 30 buckets
     data.forEach(stock => {
-      // Filter by index if requested
       if (trendFilter !== 'All' && stock.idx !== trendFilter) return;
 
       (stock.history || []).forEach(record => {
         if (!record.Date) return;
-        const recTime = new Date(record.Date).getTime();
         
-        // Remove the strict upper bound so timezone differences don't accidentally drop today's records
-        if (!isNaN(recTime) && recTime >= startTime) {
+        const parts = record.Date.split('-');
+        if (parts.length !== 3) return;
+        const recTime = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
+        
+        if (!isNaN(recTime) && recTime >= startTime && recTime <= endTime) {
           let bucketIdx = Math.floor(((recTime - startTime) / timeSpan) * BAR_COUNT);
           
-          // Safety bounds: Force recent data into the last bucket
           if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
           if (bucketIdx < 0) bucketIdx = 0;
           
-          // Strip any potential commas from the volume string, then safely cast to Number
           const cleanVol = String(record.Volume).replace(/,/g, '');
           bucketedData[bucketIdx] += (Number(cleanVol) || 0);
         }
       });
     });
 
-    // 3. Normalize heights from 0 to 100%
     const maxVol = Math.max(...bucketedData, 1); 
     
     const applyTheme = (v, cFrom, cTo, hFrom, hTo, bColor) => ({
-      height: Math.max(5, (v / maxVol) * 100), // Enforce 5% min-height so zero-volume days don't disappear completely
+      height: Math.max(5, (v / maxVol) * 100), 
       rawVolume: v,
       colorFrom: cFrom, colorTo: cTo, hoverFrom: hFrom, hoverTo: hTo, border: bColor
     });
@@ -1440,7 +1416,6 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
 
   }, [data, trendFilter, timeframe]);
 
-  // Dynamic Y-Axis Labels based on real volume
   const maxRawVolume = useMemo(() => {
     if (!trendData || trendData.length === 0) return 0;
     return Math.max(...trendData.map(d => d.rawVolume || 0));
@@ -1572,6 +1547,9 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
   );
 }
 
+// ==========================================
+// SCREENER
+// ==========================================
 function MacroScreener({ data, savedStocks, toggleSaved }) {
   const [filterIndex, setFilterIndex] = useState('All');
   const [minUpside, setMinUpside] = useState(10);
@@ -1780,6 +1758,9 @@ function MetricCard({ title, value, subtitle, trend, highlight, alert, breakdown
   );
 }
 
+// ==========================================
+// TARGET ANALYSIS
+// ==========================================
 function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [timeframe, setTimeframe] = useState('30D');
@@ -1943,7 +1924,7 @@ function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
               <span>${maxVal.toFixed(0)}</span><span>${((maxVal + minVal) / 2).toFixed(0)}</span><span>${minVal.toFixed(0)}</span>
             </div>
             <div className="absolute left-14 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
-              {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
+              {[...Array(3)].map((_, i) => <div className="border-t border-[#2d254f]/30 w-full h-0" key={i}></div>)}
             </div>
             <div className="absolute left-14 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
               <span>{axisLabels[0]}</span><span className="translate-x-1/2 hidden sm:block">{axisLabels[1]}</span><span>{axisLabels[2]}</span>
@@ -1995,6 +1976,9 @@ function TargetAnalysis({ savedStocks, watchList, toggleWatchList, data }) {
   );
 }
 
+// ==========================================
+// AI NEWS ENGINE
+// ==========================================
 function AINewsEngine({ savedStocks, watchList, data }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -2291,7 +2275,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
   const stock = data.find(s => s.t === selectedTicker);
   const history = stock ? (stock.history || []) : [];
   
-  // Isolate the transactions
   const transactions = currentOpportunity.insider_transactions || [];
   
   const filteredHistory = useMemo(() => {
@@ -2317,7 +2300,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     const targets = displayHistory.map(r => r.Target_Mean_Price || r.Close_Price);
     
     const allVals = [...prices, ...targets];
-    // Include the transaction prices in the bounds to make sure pins don't fall off the chart
     transactions.forEach(t => {
        if (t.price > 0) allVals.push(t.price);
     });
@@ -2340,16 +2322,13 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     const endDt = new Date(displayHistory[displayHistory.length - 1].Date);
     const totalSpan = endDt.getTime() - startDt.getTime();
 
-    // Calculate exact X/Y coordinates for each transaction dot
     const plottedTrades = transactions.map((trade, i) => {
       const tradeDt = new Date(trade.date);
-      // Filter out trades outside our current view
       if (tradeDt < startDt || tradeDt > endDt) return null;
       
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
       const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
       
-      // Determine dot size by transaction value (Log scale base to prevent massive circles)
       let radius = 1.5;
       if (trade.total_value > 100000) radius = 2;
       if (trade.total_value > 500000) radius = 3;
@@ -2367,7 +2346,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     };
   }, [displayHistory, transactions, timeframe]);
 
-  // Total accumulation stats
   const aggregateStats = useMemo(() => {
     let totalBought = 0;
     let highConvictionBuyers = new Set();
@@ -2383,7 +2361,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
   return (
     <div className="max-w-7xl space-y-6 animate-slide-up" style={{ animationDuration: '0.3s' }}>
       
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between md:items-center bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 p-6 rounded-3xl shadow-xl shadow-black/40 gap-4">
         <div>
            <div className="flex items-center gap-3 mb-1">
@@ -2410,7 +2387,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         </div>
       </div>
 
-      {/* Main Graph Overlay */}
       <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 flex flex-col min-h-[450px]">
         <div className="flex flex-col xl:flex-row justify-between xl:items-start mb-6 gap-4">
           <div>
@@ -2434,26 +2410,22 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         {chartProps ? (
           <div className="relative flex-1 w-full min-h-[300px] mt-2 group">
             
-            {/* Y-Axis */}
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
               <span>${chartProps.maxVal.toFixed(0)}</span>
               <span>${((chartProps.maxVal + chartProps.minVal) / 2).toFixed(0)}</span>
               <span>${chartProps.minVal.toFixed(0)}</span>
             </div>
             
-            {/* Grid Lines */}
             <div className="absolute left-14 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
               {[...Array(3)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}
             </div>
             
-            {/* X-Axis */}
             <div className="absolute left-14 right-0 bottom-0 h-6 flex justify-between items-end text-[10px] text-slate-500 font-medium px-1">
               <span>{chartProps.labels[0]}</span>
               <span className="translate-x-1/2 hidden sm:block">{chartProps.labels[1]}</span>
               <span>{chartProps.labels[2]}</span>
             </div>
 
-            {/* Render Contextual Tooltip if Hovered */}
             {hoveredTrade && (
                <div 
                  className="absolute z-50 bg-[#0a1128]/95 backdrop-blur-md border border-[#1e3a8a]/50 p-3 rounded-xl shadow-2xl pointer-events-none transition-all duration-200"
@@ -2481,7 +2453,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
                </div>
             )}
 
-            {/* The actual SVG Chart */}
             <div className="absolute left-14 right-0 top-0 bottom-6">
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                 <defs>
@@ -2490,14 +2461,11 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
                   </linearGradient>
                 </defs>
                 
-                {/* Target Line */}
                 <path d={chartProps.targetPath} fill="none" stroke="#64748b" strokeOpacity="0.8" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
                 
-                {/* Price Line */}
                 <path d={`${chartProps.pricePath} L 100 100 L 0 100 Z`} fill="url(#insider-chart-grad)" />
                 <path d={chartProps.pricePath} fill="none" stroke="#3b82f6" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
                 
-                {/* Insider Event Pins */}
                 {chartProps.plottedTrades.map((trade) => (
                   <g 
                     key={trade.id} 
@@ -2527,7 +2495,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         )}
       </div>
 
-      {/* Discovery Engine Dock (Ranked Scans) */}
       <div className="pt-6 border-t border-[#2d254f]/50">
         <div className="flex items-center gap-2 mb-4">
           <Star size={18} className="text-amber-400" />

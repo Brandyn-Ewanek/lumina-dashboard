@@ -2,7 +2,7 @@
 
 # Use a lightweight Python base image to keep AWS costs and boot times low
 
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set the working directory in the container
 
@@ -12,7 +12,7 @@ WORKDIR /app
 
 #Install the necessary dependencies, specifically edgartools for the SEC EDGAR database
 
-RUN pip install --no-cache-dir pandas boto3 edgartools
+RUN pip install --no-cache-dir pandas boto3 edgartools "hishel<0.1.0"
 
 #STREAMING_CHUNK:Copying the script...
 

@@ -2,9 +2,9 @@ import json
 import os
 import boto3
 import pandas as pd
+from io import StringIO
 from datetime import datetime, timedelta
-# edgartools is the secret weapon for SEC scraping without APIs
-from edgar import set_identity, Company, get_filings
+from edgar import set_identity, Company
 
 def calculate_conviction_score(transactions):
     """
@@ -95,14 +95,16 @@ def get_insider_trades(ticker, start_date):
                 
         return parsed_transactions
     except Exception as e:
-        print(f"Failed to fetch EDGAR data for {ticker}: {e}")
+        # Suppress individual company lookup errors to keep logs clean during full-market scan
         return []
 
 def get_oldest_stock_date(s3_client, bucket_name):
     """Fetches the oldest date from the existing S3 stock data."""
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key='data/today/sp500_latest.csv')
-        df = pd.read_csv(pd.compat.StringIO(response['Body'].read().decode('utf-8'))) if hasattr(pd, 'compat') else pd.read_csv(__import__('io').StringIO(response['Body'].read().decode('utf-8')))
+        csv_content = response['Body'].read().decode('utf-8')
+        # Added low_memory=False to silence Pandas Dtype warnings
+        df = pd.read_csv(StringIO(csv_content), low_memory=False)
         if 'Date' in df.columns:
             return df['Date'].min()
     except Exception as e:
@@ -111,8 +113,34 @@ def get_oldest_stock_date(s3_client, bucket_name):
     # Fallback to roughly 3 years ago if S3 read fails
     return (datetime.now() - timedelta(days=1095)).strftime("%Y-%m-%d")
 
+def get_all_tracked_tickers(s3_client, bucket_name):
+    """Dynamically builds a master list of all US equities tracked in your pipeline."""
+    tickers = set()
+    indices = ['sp500', 'sp400', 'sp600'] # Excluding TSX as EDGAR is US-centric
+    
+    print("Fetching master ticker list from S3 data lake...")
+    for index in indices:
+        try:
+            response = s3_client.get_object(Bucket=bucket_name, Key=f'data/today/{index}_latest.csv')
+            csv_content = response['Body'].read().decode('utf-8')
+            df = pd.read_csv(StringIO(csv_content), low_memory=False)
+            if 'Ticker' in df.columns:
+                # Add all unique tickers to our set (automatically removes duplicates)
+                tickers.update(df['Ticker'].dropna().unique().tolist())
+        except Exception as e:
+            print(f"Warning: Could not load tickers for {index}: {e}")
+            
+    # Fallback just in case S3 is completely empty
+    if not tickers:
+        print("Warning: No tickers found in S3. Falling back to test list.")
+        return ["AAPL", "MSFT", "WDFC", "CELH"]
+        
+    master_list = sorted(list(tickers))
+    print(f"Successfully compiled {len(master_list)} unique tickers for SEC scanning.")
+    return master_list
+
 def main():
-    print("Waking up SEC Insider Data Collector...")
+    print("Waking up Full-Market SEC Insider Data Collector...")
     bucket_name = os.environ.get('S3_BUCKET_NAME')
     s3_client = boto3.client('s3')
     
@@ -120,14 +148,17 @@ def main():
     start_date = get_oldest_stock_date(s3_client, bucket_name) if bucket_name else "2023-01-01"
     print(f"Aligning insider trades back to earliest price record: {start_date}")
     
-    # For testing, we will use a small sample of the S&P 600
-    # In production, this loads your cached ticker lists from S3
-    tickers = ["SMLR", "LANC", "WDFC", "RICK", "CELH"] 
+    # Dynamically fetch the 1,500+ tracked tickers from your S3 buckets
+    tickers = get_all_tracked_tickers(s3_client, bucket_name)
     
     all_summaries = []
+    processed_count = 0
 
     for ticker in tickers:
-        print(f"Scanning SEC filings for {ticker} since {start_date}...")
+        processed_count += 1
+        if processed_count % 50 == 0:
+            print(f"Progress: Scanned {processed_count}/{len(tickers)} companies...")
+            
         transactions = get_insider_trades(ticker, start_date=start_date)
         
         if transactions:
@@ -153,9 +184,9 @@ def main():
                 )
 
     # Finally, sort by the highest conviction scores and save a "Top Opportunities" list
-    # This powers the floating dock at the bottom of your UI!
     all_summaries.sort(key=lambda x: x['conviction_score'], reverse=True)
-    top_opportunities = [s for s in all_summaries if s['conviction_score'] > 0][:20]
+    # Give the dashboard the top 30 highest conviction plays
+    top_opportunities = [s for s in all_summaries if s['conviction_score'] > 0][:30]
     
     if bucket_name and top_opportunities:
         s3_client.put_object(
@@ -164,7 +195,7 @@ def main():
             Body=json.dumps(top_opportunities, indent=4),
             ContentType='application/json'
         )
-        print("Successfully uploaded Ranked Opportunities to S3.")
+        print("Successfully uploaded Top 30 Ranked Opportunities to S3.")
 
 if __name__ == "__main__":
     main()

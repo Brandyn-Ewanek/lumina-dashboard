@@ -1320,7 +1320,6 @@ function PortfolioTracker({ watchList, toggleWatchList, data }) {
 // ==========================================
 // EXISTING COMPONENTS (HOME, SCREENER, NEWS, ETC)
 // ==========================================
-
 function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], toggleSaved }) {
   const assetBreakdown = useMemo(() => {
     if (!data || data.length === 0) return null;
@@ -1378,28 +1377,79 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
   const [timeframe, setTimeframe] = useState('30D');
 
   const trendData = useMemo(() => {
-    const barCount = 30; 
-    let baseData = [];
-    for (let i = 0; i < barCount; i++) {
-      let val = 50;
-      const normalized = i / barCount;
-      if (timeframe === '30D') val = 40 + 35 * Math.sin(normalized * Math.PI * 2) + 15 * Math.cos(normalized * Math.PI * 4);
-      else if (timeframe === '60D') val = 45 + 25 * Math.sin(normalized * Math.PI * 2.5) + 20 * Math.cos(normalized * Math.PI * 1.5);
-      else if (timeframe === '90D') val = 55 + 30 * Math.cos(normalized * Math.PI * 3) - 10 * Math.sin(normalized * Math.PI * 2);
-      else if (timeframe === '180D') val = 60 + 20 * Math.sin(normalized * Math.PI * 1.5) + 25 * Math.cos(normalized * Math.PI * 5);
-      else if (timeframe === '1Y') val = 65 - 25 * Math.cos(normalized * Math.PI * 2) + 15 * Math.sin(normalized * Math.PI * 4);
-      else val = 70 + 20 * Math.sin(normalized * Math.PI * 6) - 15 * Math.cos(normalized * Math.PI * 3);
-      baseData.push(Math.max(15, Math.min(100, val + (Math.random() * 10 - 5)))); 
+    const BAR_COUNT = 30;
+    
+    // Provide a safe default state while loading
+    if (!data || data.length === 0) {
+      return Array(BAR_COUNT).fill({ height: 5, rawVolume: 0, colorFrom: 'from-blue-900/40', colorTo: 'to-blue-400/30', hoverFrom: 'hover:from-blue-600/50', hoverTo: 'hover:to-blue-300/50', border: 'border-blue-400/40' });
     }
-    const applyTheme = (v, scale, cFrom, cTo, hFrom, hTo, bColor) => ({
-      height: Math.min(v * scale, 100), colorFrom: cFrom, colorTo: cTo, hoverFrom: hFrom, hoverTo: hTo, border: bColor
+    
+    const bucketedData = Array(BAR_COUNT).fill(0);
+    
+    // 1. Establish the strict mathematical boundaries for the selected timeframe
+    let days = 30;
+    if (timeframe === '60D') days = 60;
+    if (timeframe === '90D') days = 90;
+    if (timeframe === '180D') days = 180;
+    if (timeframe === '1Y') days = 365;
+    if (timeframe === 'MAX') days = 1800;
+
+    const endTime = new Date().getTime();
+    const startTime = endTime - (days * 24 * 60 * 60 * 1000);
+    const timeSpan = endTime - startTime;
+
+    // 2. Loop through every asset and aggregate volume cleanly into the 30 buckets
+    data.forEach(stock => {
+      // Filter by index if requested
+      if (trendFilter !== 'All' && stock.idx !== trendFilter) return;
+
+      (stock.history || []).forEach(record => {
+        if (!record.Date) return;
+        const recTime = new Date(record.Date).getTime();
+        
+        // Only ingest data if the date is valid and falls within the selected window
+        if (!isNaN(recTime) && recTime >= startTime && recTime <= endTime) {
+          let bucketIdx = Math.floor(((recTime - startTime) / timeSpan) * BAR_COUNT);
+          
+          // Safety bounds
+          if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
+          if (bucketIdx < 0) bucketIdx = 0;
+          
+          bucketedData[bucketIdx] += (Number(record.Volume) || 0);
+        }
+      });
     });
-    if (trendFilter === 'S&P 500') return baseData.map(v => applyTheme(v, 1.2, 'from-blue-900/40', 'to-blue-400/30', 'hover:from-blue-600/50', 'hover:to-blue-300/50', 'border-blue-400/40'));
-    if (trendFilter === 'S&P 400') return baseData.map(v => applyTheme(v, 0.85, 'from-emerald-900/40', 'to-emerald-400/30', 'hover:from-emerald-600/50', 'hover:to-emerald-300/50', 'border-emerald-400/40'));
-    if (trendFilter === 'S&P 600') return baseData.map(v => applyTheme(v, 0.7, 'from-amber-900/40', 'to-amber-400/30', 'hover:from-amber-600/50', 'hover:to-amber-300/50', 'border-amber-400/40'));
-    if (trendFilter === 'TSX') return baseData.map(v => applyTheme(v, 0.6, 'from-rose-900/40', 'to-rose-400/30', 'hover:from-rose-600/50', 'hover:to-rose-300/50', 'border-rose-400/40'));
-    return baseData.map(v => applyTheme(v, 1.0, 'from-purple-900/40', 'to-indigo-400/30', 'hover:from-purple-600/50', 'hover:to-indigo-300/50', 'border-indigo-400/40'));
-  }, [trendFilter, timeframe]);
+
+    // 3. Normalize heights from 0 to 100%
+    const maxVol = Math.max(...bucketedData, 1); 
+    
+    const applyTheme = (v, cFrom, cTo, hFrom, hTo, bColor) => ({
+      height: Math.max(5, (v / maxVol) * 100), // Enforce 5% min-height so zero-volume days don't disappear completely
+      rawVolume: v,
+      colorFrom: cFrom, colorTo: cTo, hoverFrom: hFrom, hoverTo: hTo, border: bColor
+    });
+
+    if (trendFilter === 'S&P 500') return bucketedData.map(v => applyTheme(v, 'from-blue-900/40', 'to-blue-400/30', 'hover:from-blue-600/50', 'hover:to-blue-300/50', 'border-blue-400/40'));
+    if (trendFilter === 'S&P 400') return bucketedData.map(v => applyTheme(v, 'from-emerald-900/40', 'to-emerald-400/30', 'hover:from-emerald-600/50', 'hover:to-emerald-300/50', 'border-emerald-400/40'));
+    if (trendFilter === 'S&P 600') return bucketedData.map(v => applyTheme(v, 'from-amber-900/40', 'to-amber-400/30', 'hover:from-amber-600/50', 'hover:to-amber-300/50', 'border-amber-400/40'));
+    if (trendFilter === 'TSX') return bucketedData.map(v => applyTheme(v, 'from-rose-900/40', 'to-rose-400/30', 'hover:from-rose-600/50', 'hover:to-rose-300/50', 'border-rose-400/40'));
+    return bucketedData.map(v => applyTheme(v, 'from-purple-900/40', 'to-indigo-400/30', 'hover:from-purple-600/50', 'hover:to-indigo-300/50', 'border-indigo-400/40'));
+
+  }, [data, trendFilter, timeframe]);
+
+  // Dynamic Y-Axis Labels based on real volume
+  const maxRawVolume = useMemo(() => {
+    if (!trendData || trendData.length === 0) return 0;
+    return Math.max(...trendData.map(d => d.rawVolume || 0));
+  }, [trendData]);
+
+  const formatVol = (num) => {
+    if (num === 0) return '0';
+    if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(0) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(0) + 'K';
+    return num.toLocaleString();
+  };
 
   const axisLabels = useMemo(() => {
     const today = new Date();
@@ -1459,7 +1509,11 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
           
           <div className="relative flex-1 w-full mt-2 flex pb-6 pl-12 min-h-[220px]">
             <div className="absolute left-0 top-0 bottom-6 w-10 flex flex-col justify-between text-[10px] text-slate-500 font-medium text-right pr-3 border-r border-[#2d254f]/50">
-              <span>100M</span><span>75M</span><span>50M</span><span>25M</span><span>0M</span>
+              <span>{formatVol(maxRawVolume)}</span>
+              <span>{formatVol(maxRawVolume * 0.75)}</span>
+              <span>{formatVol(maxRawVolume * 0.5)}</span>
+              <span>{formatVol(maxRawVolume * 0.25)}</span>
+              <span>0</span>
             </div>
             <div className="absolute left-12 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
               {[...Array(5)].map((_, i) => <div key={i} className="border-t border-[#2d254f]/30 w-full h-0"></div>)}

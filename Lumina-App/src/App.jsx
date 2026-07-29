@@ -51,7 +51,8 @@ const parseCSV = (csvText) => {
   const lines = cleanText.trim().split('\n');
   if (lines.length < 2) return [];
   
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+  // Strip hidden UTF-8 BOM characters that break the 'Date' header
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').replace(/^\uFEFF/, '').trim());
   const results = [];
   
   for (let i = 1; i < lines.length; i++) {
@@ -1407,15 +1408,17 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
         if (!record.Date) return;
         const recTime = new Date(record.Date).getTime();
         
-        // Only ingest data if the date is valid and falls within the selected window
-        if (!isNaN(recTime) && recTime >= startTime && recTime <= endTime) {
+        // Remove the strict upper bound so timezone differences don't accidentally drop today's records
+        if (!isNaN(recTime) && recTime >= startTime) {
           let bucketIdx = Math.floor(((recTime - startTime) / timeSpan) * BAR_COUNT);
           
-          // Safety bounds
+          // Safety bounds: Force recent data into the last bucket
           if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
           if (bucketIdx < 0) bucketIdx = 0;
           
-          bucketedData[bucketIdx] += (Number(record.Volume) || 0);
+          // Strip any potential commas from the volume string, then safely cast to Number
+          const cleanVol = String(record.Volume).replace(/,/g, '');
+          bucketedData[bucketIdx] += (Number(cleanVol) || 0);
         }
       });
     });

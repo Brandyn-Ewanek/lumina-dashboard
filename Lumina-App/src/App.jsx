@@ -1369,7 +1369,7 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
   const [trendFilter, setTrendFilter] = useState('All');
   const [timeframe, setTimeframe] = useState('30D');
 
-  const trendData = useMemo(() => {
+const trendData = useMemo(() => {
     const BAR_COUNT = 30;
     
     if (!data || data.length === 0) {
@@ -1377,7 +1377,31 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
     }
     
     const bucketedData = Array(BAR_COUNT).fill(0);
-    
+
+    // 1. Extract valid dates & volumes with flexible key matching
+    const validRecords = [];
+    data.forEach(stock => {
+      if (trendFilter !== 'All' && stock.idx !== trendFilter) return;
+
+      (stock.history || []).forEach(record => {
+        const rawDate = record.Date || record.date || record.Datetime || record['Unnamed: 0'];
+        const rawVol = record.Volume ?? record.volume ?? record.Vol ?? record.vol ?? record.Average_Volume ?? 0;
+        
+        if (!rawDate) return;
+        const recTime = new Date(rawDate).getTime();
+        const volNum = Number(String(rawVol).replace(/,/g, '')) || 0;
+
+        if (!isNaN(recTime) && volNum > 0) {
+          validRecords.push({ time: recTime, vol: volNum });
+        }
+      });
+    });
+
+    if (validRecords.length === 0) {
+      return Array(BAR_COUNT).fill({ height: 5, rawVolume: 0, colorFrom: 'from-blue-900/40', colorTo: 'to-blue-400/30', hoverFrom: 'hover:from-blue-600/50', hoverTo: 'hover:to-blue-300/50', border: 'border-blue-400/40' });
+    }
+
+    // 2. Determine timeframe relative to the LATEST date found in your S3 data
     let days = 30;
     if (timeframe === '60D') days = 60;
     if (timeframe === '90D') days = 90;
@@ -1385,36 +1409,25 @@ function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], to
     if (timeframe === '1Y') days = 365;
     if (timeframe === 'MAX') days = 1800;
 
-    const endTime = new Date().getTime();
-    const startTime = endTime - (days * 24 * 60 * 60 * 1000);
-    const timeSpan = endTime - startTime || 1;
+    const latestTimeInData = Math.max(...validRecords.map(r => r.time));
+    const startTime = latestTimeInData - (days * 24 * 60 * 60 * 1000);
+    const timeSpan = Math.max(1, latestTimeInData - startTime);
 
-    data.forEach(stock => {
-      if (trendFilter !== 'All' && stock.idx !== trendFilter) return;
-
-      (stock.history || []).forEach(record => {
-        if (!record.Date) return;
-        
-        const parts = record.Date.split('-');
-        if (parts.length !== 3) return;
-        const recTime = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
-        
-        if (!isNaN(recTime) && recTime >= startTime && recTime <= endTime) {
-          let bucketIdx = Math.floor(((recTime - startTime) / timeSpan) * BAR_COUNT);
-          
-          if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
-          if (bucketIdx < 0) bucketIdx = 0;
-          
-          const cleanVol = String(record.Volume).replace(/,/g, '');
-          bucketedData[bucketIdx] += (Number(cleanVol) || 0);
-        }
-      });
+    // 3. Bucket the volume data
+    validRecords.forEach(r => {
+      if (r.time >= startTime && r.time <= latestTimeInData) {
+        let bucketIdx = Math.floor(((r.time - startTime) / timeSpan) * BAR_COUNT);
+        if (bucketIdx >= BAR_COUNT) bucketIdx = BAR_COUNT - 1;
+        if (bucketIdx < 0) bucketIdx = 0;
+        bucketedData[bucketIdx] += r.vol;
+      }
     });
 
-    const maxVol = Math.max(...bucketedData, 1); 
+    // 4. Normalize heights and scale
+    const maxVol = Math.max(...bucketedData, 1);
     
     const applyTheme = (v, cFrom, cTo, hFrom, hTo, bColor) => ({
-      height: Math.max(5, (v / maxVol) * 100), 
+      height: Math.max(5, (v / maxVol) * 100),
       rawVolume: v,
       colorFrom: cFrom, colorTo: cTo, hoverFrom: hFrom, hoverTo: hTo, border: bColor
     });

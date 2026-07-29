@@ -47,12 +47,19 @@ const globalStyles = `
 `;
 
 const parseCSV = (csvText) => {
-  const cleanText = csvText.replace(/\r/g, ''); 
+  // Fix the BOM issue and Windows carriage returns
+  const cleanText = csvText.replace(/\r/g, '').replace(/^\uFEFF/, ''); 
   const lines = cleanText.trim().split('\n');
   if (lines.length < 2) return [];
   
-  // CRITICAL FIX: The `replace(/^\uFEFF/, '')` strips the invisible BOM character from AWS files!
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').replace(/^\uFEFF/, '').trim());
+  // THE PANDAS FIX: If the first header is blank, forcefully name it 'Date'
+  const headers = lines[0].split(',').map((h, index) => {
+    let cleanHeader = h.replace(/^"|"$/g, '').trim();
+    if (cleanHeader === '' && index === 0) return 'Date';
+    if (cleanHeader === 'Unnamed: 0' && index === 0) return 'Date';
+    return cleanHeader;
+  });
+  
   const results = [];
   
   for (let i = 1; i < lines.length; i++) {
@@ -60,8 +67,12 @@ const parseCSV = (csvText) => {
     const obj = {};
     headers.forEach((header, index) => {
       let val = row[index] ? row[index].replace(/^"|"$/g, '').trim() : null;
-      if (val !== null && val !== '' && !isNaN(val)) {
-        val = Number(val);
+      if (val !== null && val !== '') {
+        // Violently strip commas out so Yahoo Finance volume parses as a real number
+        const noCommas = val.replace(/,/g, '');
+        if (!isNaN(noCommas) && noCommas !== '') {
+          val = Number(noCommas);
+        }
       }
       obj[header] = val;
     });

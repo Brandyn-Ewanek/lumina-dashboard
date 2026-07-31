@@ -60,6 +60,15 @@ Lumina is a premium, serverless quantitative finance dashboard built for institu
 *   **Persistent "Institutional Plays" Tray:** Allows users to save favorite stock, macro metric, lag, and timeframe combinations to an interactive, cloud-synced bottom tray that persists across sessions.
 *   **Tech Used:** React, Custom Multi-Axis SVG Engine, Pearson Correlation Math Engine, AWS Lambda (`lumina-macro-favorites`), AWS S3 (Data Lake).
 
+### SEC Insider Tracking & Discovery Engine
+![Insider Tracking](Assets/insider-tracking.png)
+
+*   **Automated SEC EDGAR Scraping:** Operates a dedicated AWS Fargate container to scrape, parse, and clean Form 4 insider trading filings (open-market C-suite buys and sells) across the entire tracked market.
+*   **Proportional Transaction Mapping:** Plots insider executions directly onto the asset's historical price and target timeline using the custom dependency-free SVG engine. Transaction nodes are mathematically scaled in radius based on the total dollar volume of the trade for instant visual weighting.
+*   **High-Conviction Discovery Grid:** A continuously updated, wrap-around matrix at the bottom of the dashboard that ranks and surfaces market-wide insider activity. The grid is sorted strictly by the highest-value single transaction to identify massive C-suite conviction plays.
+*   **Portfolio & Pipeline Integration:** Features a unified dropdown filtering system allowing users to instantly analyze insider sentiment explicitly for assets saved within their personal Portfolio or Active Pipeline.
+*   **Tech Used:** React, Custom SVG Math Engine, AWS ECS Fargate (Python SEC scraper pipeline), AWS S3 (JSON Data Lake).
+
 ### AI News Engine & Delta Matrix
 ![AI News Engine](Assets/news-engine.png)
 

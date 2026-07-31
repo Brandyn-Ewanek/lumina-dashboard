@@ -442,7 +442,7 @@ export default function App() {
               <EconomicAnalysis savedStocks={savedStocks} watchList={watchList} data={liveData} macroData={macroData} />
             )}
             {activeTab === 'insider' && (
-              <InsiderTracking data={liveData} topOpportunities={insiderData} savedStocks={savedStocks} toggleSaved={toggleSavedStock} />
+              <InsiderTracking data={liveData} topOpportunities={insiderData} savedStocks={savedStocks} toggleSaved={toggleSavedStock} watchList={watchList} />
             )}
             {activeTab === 'news' && (
               <AINewsEngine savedStocks={savedStocks} watchList={watchList} data={liveData} />
@@ -2320,7 +2320,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
   const [timeframe, setTimeframe] = useState('180D');
   const [hoveredTrade, setHoveredTrade] = useState(null);
 
-  // Combine Pipeline and Portfolio for easy dropdown access
+  // Combine Pipeline and Portfolio for the dropdown
   const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...(watchList || [])])], [savedStocks, watchList]);
 
   // Sort opportunities strictly by the largest recent BUY transaction
@@ -2336,11 +2336,16 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
     });
   }, [topOpportunities]);
 
+  // Intelligent auto-selection
   useEffect(() => {
-    if (sortedOpportunities && sortedOpportunities.length > 0 && !selectedTicker) {
-      setSelectedTicker(sortedOpportunities[0].ticker);
+    if (!selectedTicker) {
+      if (combinedAssets.length > 0) {
+        setSelectedTicker(combinedAssets[0]);
+      } else if (sortedOpportunities.length > 0) {
+        setSelectedTicker(sortedOpportunities[0].ticker);
+      }
     }
-  }, [sortedOpportunities, selectedTicker]);
+  }, [combinedAssets, sortedOpportunities, selectedTicker]);
 
   if (!sortedOpportunities || sortedOpportunities.length === 0) {
     return (
@@ -2359,7 +2364,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
   const history = stock ? (stock.history || []) : [];
   
   // Isolate the transactions
-  const transactions = currentOpportunity.insider_transactions || [];
+  const transactions = currentOpportunity ? (currentOpportunity.insider_transactions || []) : [];
   
   const filteredHistory = useMemo(() => {
     if (history.length < 2) return history;
@@ -2416,11 +2421,8 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
       const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
       
-      // Much smaller, refined radius sizes so they don't dominate the screen
-      let radius = 1;
-      if (trade.total_value > 100000) radius = 1.5;
-      if (trade.total_value > 500000) radius = 2.5;
-      if (trade.total_value > 1000000) radius = 4;
+      // Dynamic proportional scaling: Based on the square root of the dollar value
+      let radius = Math.max(2, Math.min(15, 1.5 + (Math.sqrt(trade.total_value) / 250)));
       
       return { ...trade, id: i, x: xPct, y: yPct, r: radius };
     }).filter(Boolean);
@@ -2461,7 +2463,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
            <p className="text-sm text-slate-400 mt-1">Cross-referencing {selectedTicker} C-suite open-market purchases with algorithmic price targets.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="text-right hidden sm:block">
+          <div className="text-right hidden sm:block mr-2">
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Total Open-Market Buys</p>
             <p className="text-xl font-bold text-emerald-400">
               ${(aggregateStats.totalBought / 1000000).toFixed(2)}M
@@ -2469,26 +2471,35 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
           </div>
 
           <div className="relative">
-             <select 
-               className="w-full sm:w-48 bg-[#111c38]/90 border border-[#1e3a8a]/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer pr-8"
-               value={selectedTicker}
-               onChange={(e) => setSelectedTicker(e.target.value)}
-             >
-               <optgroup label="Recent SEC Filings">
-                 {sortedOpportunities.slice(0, 30).map(o => <option key={`sec-${o.ticker}`} value={o.ticker}>{o.ticker}</option>)}
-               </optgroup>
-               {combinedAssets.length > 0 && (
-                 <optgroup label="My Portfolio & Pipeline">
-                   {combinedAssets.map(t => <option key={`port-${t}`} value={t}>{t}</option>)}
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 ml-1">Select Asset to Analyze</label>
+            <select 
+              className="w-full sm:w-56 bg-[#111c38]/90 border border-[#1e3a8a]/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer pr-8"
+              value={selectedTicker}
+              onChange={(e) => setSelectedTicker(e.target.value)}
+            >
+              {/* Fallback to show the ticker if they clicked it from the discovery grid below but it isn't saved */}
+              {selectedTicker && !combinedAssets.includes(selectedTicker) && (
+                 <optgroup label="Currently Viewing">
+                   <option value={selectedTicker}>{selectedTicker}</option>
                  </optgroup>
-               )}
-             </select>
-             <ChevronRight size={16} className="absolute right-3 top-3 text-slate-400 pointer-events-none rotate-90" />
+              )}
+              {savedStocks.length > 0 && (
+                <optgroup label="Active Pipeline">
+                  {savedStocks.map(t => <option key={`pipe-${t}`} value={t}>{t}</option>)}
+                </optgroup>
+              )}
+              {(watchList || []).length > 0 && (
+                <optgroup label="Saved Portfolio">
+                  {watchList.map(t => <option key={`watch-${t}`} value={t}>{t}</option>)}
+                </optgroup>
+              )}
+            </select>
+            <ChevronRight size={16} className="absolute right-4 bottom-3 text-slate-400 pointer-events-none rotate-90" />
           </div>
 
           <button 
             onClick={() => toggleSaved(selectedTicker)}
-            className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
+            className={`w-full sm:w-auto px-5 py-2.5 mt-5 sm:mt-0 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
           >
             {savedStocks.includes(selectedTicker) ? <Check size={18} /> : <Plus size={18} />}
             <span className="hidden md:inline">{savedStocks.includes(selectedTicker) ? 'In Portfolio' : 'Track Asset'}</span>
@@ -2599,7 +2610,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
                       fill={trade.type === 'BUY' ? '#10b981' : '#f43f5e'} 
                       stroke={trade.type === 'BUY' ? '#064e3b' : '#881337'} 
                       strokeWidth="0.5" 
-                      opacity={trade.type === 'BUY' ? "1" : "0.5"}
+                      opacity={trade.type === 'BUY' ? "0.9" : "0.5"}
                       vectorEffect="non-scaling-stroke" 
                       className="transition-all duration-300 group-hover:stroke-white group-hover:stroke-1"
                     />
@@ -2621,7 +2632,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
           <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full ml-2">Sorted by Largest Buy</span>
         </div>
         
-        {/* Changed to a clean Grid instead of a scrolling row */}
+        {/* The Grid layout sorting by largest dollar buy */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
           {sortedOpportunities.slice(0, 100).map((opp) => {
             const buys = (opp.insider_transactions || []).filter(t => t.type === 'BUY');

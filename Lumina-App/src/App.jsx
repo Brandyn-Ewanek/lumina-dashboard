@@ -2315,18 +2315,34 @@ function AINewsEngine({ savedStocks, watchList, data }) {
 // ==========================================
 // INSIDER TRACKING COMPONENT
 // ==========================================
-function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
+function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, watchList }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [timeframe, setTimeframe] = useState('180D');
   const [hoveredTrade, setHoveredTrade] = useState(null);
 
-  useEffect(() => {
-    if (topOpportunities && topOpportunities.length > 0 && !selectedTicker) {
-      setSelectedTicker(topOpportunities[0].ticker);
-    }
-  }, [topOpportunities, selectedTicker]);
+  // Combine Pipeline and Portfolio for easy dropdown access
+  const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...(watchList || [])])], [savedStocks, watchList]);
 
-  if (!topOpportunities || topOpportunities.length === 0) {
+  // Sort opportunities strictly by the largest recent BUY transaction
+  const sortedOpportunities = useMemo(() => {
+    if (!topOpportunities) return [];
+    return [...topOpportunities].sort((a, b) => {
+      const getLatestMaxBuy = (opp) => {
+        const buys = (opp.insider_transactions || []).filter(t => t.type === 'BUY');
+        if (buys.length === 0) return 0;
+        return Math.max(...buys.map(t => t.total_value));
+      };
+      return getLatestMaxBuy(b) - getLatestMaxBuy(a);
+    });
+  }, [topOpportunities]);
+
+  useEffect(() => {
+    if (sortedOpportunities && sortedOpportunities.length > 0 && !selectedTicker) {
+      setSelectedTicker(sortedOpportunities[0].ticker);
+    }
+  }, [sortedOpportunities, selectedTicker]);
+
+  if (!sortedOpportunities || sortedOpportunities.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] animate-slide-up text-center">
         <div className="w-24 h-24 rounded-full bg-[#111c38]/80 border border-[#1e3a8a]/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(30,58,138,0.3)]">
@@ -2338,7 +2354,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
     );
   }
 
-  const currentOpportunity = topOpportunities.find(o => o.ticker === selectedTicker) || topOpportunities[0];
+  const currentOpportunity = sortedOpportunities.find(o => o.ticker === selectedTicker) || sortedOpportunities[0];
   const stock = data.find(s => s.t === selectedTicker);
   const history = stock ? (stock.history || []) : [];
   
@@ -2400,13 +2416,13 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
       const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
       
-      // Determine dot size by transaction value (Log scale base to prevent massive circles)
-      let radius = 1.5;
-      if (trade.total_value > 100000) radius = 2;
-      if (trade.total_value > 500000) radius = 3;
-      if (trade.total_value > 1000000) radius = 4.5;
+      // Much smaller, refined radius sizes so they don't dominate the screen
+      let radius = 1;
+      if (trade.total_value > 100000) radius = 1.5;
+      if (trade.total_value > 500000) radius = 2.5;
+      if (trade.total_value > 1000000) radius = 4;
       
-      return { ...trade, id: i, x: xPct, y: yPct, r: radius, isMassive: trade.total_value > 1000000 };
+      return { ...trade, id: i, x: xPct, y: yPct, r: radius };
     }).filter(Boolean);
 
     const mid = new Date(startDt.getTime() + totalSpan / 2);
@@ -2444,19 +2460,38 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
            </div>
            <p className="text-sm text-slate-400 mt-1">Cross-referencing {selectedTicker} C-suite open-market purchases with algorithmic price targets.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right mr-3">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="text-right hidden sm:block">
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Total Open-Market Buys</p>
             <p className="text-xl font-bold text-emerald-400">
               ${(aggregateStats.totalBought / 1000000).toFixed(2)}M
             </p>
           </div>
+
+          <div className="relative">
+             <select 
+               className="w-full sm:w-48 bg-[#111c38]/90 border border-[#1e3a8a]/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer pr-8"
+               value={selectedTicker}
+               onChange={(e) => setSelectedTicker(e.target.value)}
+             >
+               <optgroup label="Recent SEC Filings">
+                 {sortedOpportunities.slice(0, 30).map(o => <option key={`sec-${o.ticker}`} value={o.ticker}>{o.ticker}</option>)}
+               </optgroup>
+               {combinedAssets.length > 0 && (
+                 <optgroup label="My Portfolio & Pipeline">
+                   {combinedAssets.map(t => <option key={`port-${t}`} value={t}>{t}</option>)}
+                 </optgroup>
+               )}
+             </select>
+             <ChevronRight size={16} className="absolute right-3 top-3 text-slate-400 pointer-events-none rotate-90" />
+          </div>
+
           <button 
             onClick={() => toggleSaved(selectedTicker)}
-            className={`px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
+            className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
           >
             {savedStocks.includes(selectedTicker) ? <Check size={18} /> : <Plus size={18} />}
-            {savedStocks.includes(selectedTicker) ? 'In Portfolio' : 'Track Asset'}
+            <span className="hidden md:inline">{savedStocks.includes(selectedTicker) ? 'In Portfolio' : 'Track Asset'}</span>
           </button>
         </div>
       </div>
@@ -2477,7 +2512,10 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
             <div className="flex items-center gap-2 text-blue-400"><div className="w-3 h-0.5 bg-blue-500"></div> Close Price</div>
             <div className="flex items-center gap-2 text-slate-500"><div className="w-3 h-0.5 border-t border-dashed border-slate-500"></div> Analyst Mean Target</div>
             <div className="flex items-center gap-2 text-emerald-400">
-              <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/80 flex items-center justify-center"><div className="w-1 h-1 bg-emerald-400 rounded-full"></div></div> High-Volume Buy
+              <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Executive Buy
+            </div>
+            <div className="flex items-center gap-2 text-rose-400">
+              <div className="w-2 h-2 rounded-full bg-rose-500"></div> Executive Sell
             </div>
           </div>
         </div>
@@ -2556,9 +2594,6 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
                     onMouseEnter={() => setHoveredTrade(trade)}
                     onMouseLeave={() => setHoveredTrade(null)}
                   >
-                    {trade.isMassive && trade.type === 'BUY' && (
-                       <circle cx={trade.x} cy={trade.y} r={trade.r * 2.5} fill="#10b981" opacity="0.2" className="animate-ping" vectorEffect="non-scaling-stroke" />
-                    )}
                     <circle 
                       cx={trade.x} cy={trade.y} r={trade.r} 
                       fill={trade.type === 'BUY' ? '#10b981' : '#f43f5e'} 
@@ -2583,30 +2618,37 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved }) {
         <div className="flex items-center gap-2 mb-4">
           <Star size={18} className="text-amber-400" />
           <h3 className="text-lg font-serif font-medium text-slate-200 tracking-wide">SEC Discovery Engine</h3>
-          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full ml-2">Top Form 4 Convictions</span>
+          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full ml-2">Sorted by Largest Buy</span>
         </div>
         
-        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-          {topOpportunities.map((opp) => (
-            <button 
-              key={opp.ticker}
-              onClick={() => setSelectedTicker(opp.ticker)}
-              className={`shrink-0 flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 min-w-[220px] ${selectedTicker === opp.ticker ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'bg-[#111c38]/60 border-[#1e3a8a]/30 hover:border-[#1e3a8a]/80 hover:bg-[#16254a]'}`}
-            >
-              <div className="flex justify-between w-full items-center mb-3">
-                <span className={`text-xl font-bold ${selectedTicker === opp.ticker ? 'text-white' : 'text-slate-200'}`}>{opp.ticker}</span>
-                <div className="flex flex-col items-end">
-                  <span className={`text-lg font-black ${opp.conviction_score > 75 ? 'text-emerald-400' : 'text-amber-400'}`}>{opp.conviction_score}</span>
-                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Conviction</span>
+        {/* Changed to a clean Grid instead of a scrolling row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+          {sortedOpportunities.slice(0, 100).map((opp) => {
+            const buys = (opp.insider_transactions || []).filter(t => t.type === 'BUY');
+            const maxBuy = buys.length > 0 ? Math.max(...buys.map(t => t.total_value)) : 0;
+            return (
+              <button 
+                key={opp.ticker}
+                onClick={() => setSelectedTicker(opp.ticker)}
+                className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 ${selectedTicker === opp.ticker ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'bg-[#111c38]/60 border-[#1e3a8a]/30 hover:border-[#1e3a8a]/80 hover:bg-[#16254a]'}`}
+              >
+                <div className="flex justify-between w-full items-center mb-3">
+                  <span className={`text-xl font-bold ${selectedTicker === opp.ticker ? 'text-white' : 'text-slate-200'}`}>{opp.ticker}</span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm font-black text-emerald-400">
+                      ${maxBuy > 1000000 ? (maxBuy/1000000).toFixed(1) + 'M' : maxBuy > 1000 ? (maxBuy/1000).toFixed(0) + 'K' : maxBuy}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Top Buy</span>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="w-full flex items-center gap-2 text-xs text-slate-400">
-                <DollarSign size={14} className="text-emerald-500/70" />
-                <span>{opp.insider_transactions.filter(t => t.type==='BUY').length} Executed Buys</span>
-              </div>
-            </button>
-          ))}
+                
+                <div className="w-full flex items-center gap-2 text-xs text-slate-400">
+                  <DollarSign size={14} className="text-emerald-500/70" />
+                  <span>{buys.length} Executed Buys</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
       

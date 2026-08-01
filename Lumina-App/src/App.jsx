@@ -492,6 +492,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
   const [lagMonths, setLagMonths] = useState(0); 
   
   const [savedPlays, setSavedPlays] = useState([]);
+  const [discoveredPlays, setDiscoveredPlays] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -503,9 +504,9 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
     return Object.keys(macroData[0]).filter(k => k !== 'Date' && k !== 'index').sort();
   }, [macroData]);
 
-  // Fetch saved plays from S3 on load
+  // Fetch saved plays & pre-computed nightly correlations from S3 on load
   useEffect(() => {
-    const fetchSavedPlays = async () => {
+    const fetchSavedAndDiscoveredPlays = async () => {
       try {
         const response = await fetch(`${S3_BUCKET_URL}/dashboard/favorites/macro_favorites.json?t=${new Date().getTime()}`);
         if (response.ok) {
@@ -515,9 +516,28 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
       } catch (e) {
         console.log("No saved plays found or error fetching.");
       }
+
+      try {
+        const discRes = await fetch(`${S3_BUCKET_URL}/dashboard/macro/top_macro_correlations.json?t=${new Date().getTime()}`);
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          setDiscoveredPlays(Array.isArray(discData) ? discData : []);
+        }
+      } catch (e) {
+        console.log("No pre-computed macro discoveries found in S3 yet.");
+      }
     };
-    fetchSavedPlays();
+    fetchSavedAndDiscoveredPlays();
   }, []);
+
+  // Filter discoveries specific to portfolio assets
+  const portfolioDiscoveries = useMemo(() => {
+    if (!discoveredPlays || discoveredPlays.length === 0) return [];
+    // Prioritize user's active portfolio / watchlist assets
+    const portfolioMatches = discoveredPlays.filter(p => combinedAssets.includes(p.ticker));
+    // If user has matches, return those, otherwise show top market-wide discoveries
+    return portfolioMatches.length > 0 ? portfolioMatches : discoveredPlays.slice(0, 12);
+  }, [discoveredPlays, combinedAssets]);
 
   // Auto-select defaults
   useEffect(() => {
@@ -748,7 +768,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                       <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
                     ))}
                   </div>
-                  {/* The new Lag Feature Control UI */}
+                  {/* The Lag Feature Control UI */}
                   <div className="flex bg-[#07050f]/60 border border-amber-500/30 rounded-xl p-1 w-fit shadow-inner">
                     {[0, 1, 2, 3, 4, 5, 6].map(m => (
                       <button 
@@ -887,6 +907,64 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
         <div className="text-center py-20 text-slate-500">Not enough historical alignment data for this specific pairing.</div>
       )}
 
+      {/* NEW: Automated Portfolio Macro Discoveries Matrix */}
+      {portfolioDiscoveries.length > 0 && (
+        <div className="pt-8 mt-8 border-t border-[#2d254f]/50 animate-slide-up">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Sparkles size={20} className="text-indigo-400" />
+              <h3 className="text-xl font-serif font-medium text-amber-50/90 tracking-wide">Automated Portfolio Discoveries</h3>
+            </div>
+            <span className="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded-full font-bold">
+              Nightly AWS Fargate Scan (|r| &ge; 0.65)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {portfolioDiscoveries.map((disc, idx) => (
+              <div
+                key={`disc-${idx}`}
+                className={`group bg-[#0d1428]/90 border p-5 rounded-2xl cursor-pointer transition-all flex flex-col relative overflow-hidden ${
+                  disc.correlation > 0.5 ? 'border-emerald-500/30 hover:border-emerald-400 hover:shadow-[0_0_25px_rgba(16,185,129,0.2)]' :
+                  disc.correlation < -0.5 ? 'border-rose-500/30 hover:border-rose-400 hover:shadow-[0_0_25px_rgba(244,63,94,0.2)]' :
+                  'border-[#1e3a8a]/40 hover:border-blue-500/60'
+                }`}
+                onClick={() => {
+                  setSelectedTicker(disc.ticker);
+                  setSelectedMacro(disc.macro);
+                  if (disc.timeframe) setTimeframe(disc.timeframe);
+                  if (disc.lag !== undefined) setLagMonths(disc.lag);
+                }}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-white">{disc.ticker}</span>
+                    <span className="text-slate-500 text-xs">×</span>
+                  </div>
+                  <div className={`text-lg font-black ${disc.correlation > 0.5 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {disc.correlation > 0 ? '+' : ''}{disc.correlation.toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="text-xs font-semibold text-blue-400 truncate mb-4">
+                  {disc.macro.replace(/_/g, ' ')}
+                </div>
+
+                <div className="mt-auto flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-slate-300 bg-[#07050f]/80 px-2.5 py-1 rounded-md border border-[#1e3a8a]/40">
+                    {disc.timeframe} View
+                  </span>
+                  <span className="font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/30">
+                    {disc.lag === 0 ? 'No Lag' : `${disc.lag}M Lag`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Saved Institutional Plays */}
       {savedPlays.length > 0 && (
         <div className="pt-8 mt-8 border-t border-[#2d254f]/50 animate-slide-up">
           <div className="flex items-center gap-2 mb-6">
@@ -949,7 +1027,6 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
                     <span className="font-bold text-slate-300 bg-[#07050f]/60 px-2 py-1 rounded-md border border-[#1e3a8a]/30">
                       {play.timeframe || '180D'} View
                     </span>
-                    {/* Render the specific Lag configuration if it exists */}
                     {play.lag > 0 && (
                       <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/30">
                         {play.lag}M Lag

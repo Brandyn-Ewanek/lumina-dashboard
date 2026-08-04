@@ -132,6 +132,13 @@ def get_yahoo_data(ticker, index_name):
             'ebitdaMargins': info.get('ebitdaMargins'),
             'operatingMargins': info.get('operatingMargins'),
             
+            # Raw Revenue & Earnings (Absolute Values)
+            'totalRevenue': info.get('totalRevenue'),
+            'ebitda': info.get('ebitda'),
+            'netIncomeToCommon': info.get('netIncomeToCommon'),
+            'trailingEps': info.get('trailingEps'),
+            'forwardEps': info.get('forwardEps'),
+            
             # Deep Value & Balance Sheet
             'priceToBook': info.get('priceToBook'),
             'enterpriseToRevenue': info.get('enterpriseToRevenue'),

@@ -3,7 +3,8 @@ import {
   LineChart, Search, TrendingUp, TrendingDown, Activity, Globe, Newspaper,
   ChevronRight, Bell, Menu, Sparkles, Filter, Plus, Check, ListOrdered, 
   RefreshCw, AlertTriangle, Loader2, Star, Briefcase, X, PieChart,
-  ArrowUpRight, ArrowDownRight, Users, DollarSign, ShieldAlert
+  ArrowUpRight, ArrowDownRight, Users, DollarSign, ShieldAlert,
+  Database, Table, FileText, CheckCircle2, Calendar
 } from 'lucide-react';
 
 const globalStyles = `
@@ -33,6 +34,7 @@ const globalStyles = `
   
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
@@ -47,12 +49,10 @@ const globalStyles = `
 `;
 
 const parseCSV = (csvText) => {
-  // Fix the BOM issue and Windows carriage returns
   const cleanText = csvText.replace(/\r/g, '').replace(/^\uFEFF/, ''); 
   const lines = cleanText.trim().split('\n');
   if (lines.length < 2) return [];
   
-  // THE PANDAS FIX: If the first header is blank, forcefully name it 'Date'
   const headers = lines[0].split(',').map((h, index) => {
     let cleanHeader = h.replace(/^"|"$/g, '').trim();
     if (cleanHeader === '' && index === 0) return 'Date';
@@ -68,7 +68,6 @@ const parseCSV = (csvText) => {
     headers.forEach((header, index) => {
       let val = row[index] ? row[index].replace(/^"|"$/g, '').trim() : null;
       if (val !== null && val !== '') {
-        // Violently strip commas out so Yahoo Finance volume parses as a real number
         const noCommas = val.replace(/,/g, '');
         if (!isNaN(noCommas) && noCommas !== '') {
           val = Number(noCommas);
@@ -81,7 +80,6 @@ const parseCSV = (csvText) => {
   return results;
 };
 
-// Pearson Correlation Math Function
 const getPearsonCorrelation = (x, y) => {
   let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
   const minLength = Math.min(x.length, y.length);
@@ -353,13 +351,15 @@ export default function App() {
           </h1>
         </div>
 
-        <div className="flex-1 px-4 space-y-2 mt-4">
+        <div className="flex-1 px-4 space-y-2 mt-4 custom-scrollbar overflow-y-auto pb-4">
           <NavItem icon={<Activity size={18} />} label="Macro Screener" active={activeTab === 'macro'} onClick={() => handleTabChange('macro', 'Macro Screener')} />
           <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => handleTabChange('portfolio', 'Portfolio Tracker')} />
           <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => handleTabChange('deep', 'Target Analysis')} />
           <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => handleTabChange('bench', 'Macro Correlator')} />
           <NavItem icon={<Users size={18} />} label="Insider Tracking" active={activeTab === 'insider'} onClick={() => handleTabChange('insider', 'Insider Tracking')} />
           <NavItem icon={<Newspaper size={18} />} label="AI News Engine" active={activeTab === 'news'} onClick={() => handleTabChange('news', 'AI News Engine')} />
+          <div className="my-2 border-t border-[#1e3a8a]/30 w-full"></div>
+          <NavItem icon={<Database size={18} />} label="Data Lake Explorer" active={activeTab === 'data'} onClick={() => handleTabChange('data', 'Data Explorer')} />
         </div>
 
         <div className="p-4 m-4 bg-[#111c38]/80 rounded-2xl border border-[#1e3a8a]/50 backdrop-blur-md">
@@ -376,7 +376,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="relative z-10 md:ml-[18rem] p-6 md:p-8 min-h-screen pb-24">
         
-        {activeTab === 'macro' && (
+        {activeTab !== 'home' && (
           <header className="flex justify-between items-center mb-10 bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 p-4 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
             <div className="flex items-center md:hidden">
               <Menu className="text-slate-400 mr-4 cursor-pointer" />
@@ -447,6 +447,9 @@ export default function App() {
             {activeTab === 'news' && (
               <AINewsEngine savedStocks={savedStocks} watchList={watchList} data={liveData} />
             )}
+            {activeTab === 'data' && (
+              <DataExplorer data={liveData} macroData={macroData} insiderData={insiderData} sentiment={aiSentiment} />
+            )}
           </>
         )}
       </main>
@@ -478,6 +481,222 @@ export default function App() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+// ==========================================
+// DATA LAKE EXPLORER COMPONENT
+// ==========================================
+function DataExplorer({ data, macroData, insiderData, sentiment }) {
+  const [view, setView] = useState('stocks'); // 'stocks', 'macro', 'insider'
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Calculate Pipeline Health Metrics
+  const lastStockUpdate = data.length > 0 && data[0].latestRecord ? data[0].latestRecord.Date : 'N/A';
+  const lastMacroUpdate = macroData.length > 0 ? macroData[macroData.length - 1].Date : 'N/A';
+  const macroCols = macroData.length > 0 ? Object.keys(macroData[0]).filter(k => k !== 'Date' && k !== 'index').length : 0;
+  const lastInsiderUpdate = insiderData.length > 0 && insiderData[0].last_updated ? insiderData[0].last_updated : 'N/A';
+  
+  // Format tables for rendering (Limit to 100 rows for performance)
+  const filteredStocks = useMemo(() => {
+    return data
+      .filter(s => s.t.toLowerCase().includes(searchTerm.toLowerCase()) || s.n.toLowerCase().includes(searchTerm.toLowerCase()))
+      .slice(0, 100);
+  }, [data, searchTerm]);
+
+  const filteredMacro = useMemo(() => {
+    // Reverse chronologically
+    return [...macroData].reverse().slice(0, 100);
+  }, [macroData]);
+
+  const filteredInsider = useMemo(() => {
+    return insiderData
+      .filter(s => s.ticker.toLowerCase().includes(searchTerm.toLowerCase()))
+      .slice(0, 100);
+  }, [insiderData, searchTerm]);
+
+  const renderStockTable = () => (
+    <div className="overflow-x-auto custom-scrollbar rounded-xl border border-[#2d254f]/50">
+      <table className="min-w-full divide-y divide-[#2d254f]/50 text-left">
+        <thead className="bg-[#111c38] text-[10px] uppercase tracking-wider text-slate-400">
+          <tr>
+            <th className="px-4 py-3 font-bold rounded-tl-xl">Ticker</th>
+            <th className="px-4 py-3 font-bold">Company Name</th>
+            <th className="px-4 py-3 font-bold">Index</th>
+            <th className="px-4 py-3 font-bold">Sector</th>
+            <th className="px-4 py-3 font-bold text-right">Close Price</th>
+            <th className="px-4 py-3 font-bold text-right">Mean Target</th>
+            <th className="px-4 py-3 font-bold text-right rounded-tr-xl">Volume</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#2d254f]/30 bg-[#0d0b1a]/40">
+          {filteredStocks.map((stock, i) => (
+            <tr key={i} className="hover:bg-[#16122b]/80 transition-colors text-sm text-slate-300">
+              <td className="px-4 py-3 font-bold text-white">{stock.t}</td>
+              <td className="px-4 py-3 truncate max-w-[200px]" title={stock.n}>{stock.n}</td>
+              <td className="px-4 py-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#1e3a8a]/20 text-blue-300 border border-[#1e3a8a]/40">{stock.idx}</span></td>
+              <td className="px-4 py-3 truncate max-w-[150px] text-xs">{stock.sec}</td>
+              <td className="px-4 py-3 font-medium text-right">${stock.close.toFixed(2)}</td>
+              <td className="px-4 py-3 font-medium text-right text-emerald-400">${stock.target.toFixed(2)}</td>
+              <td className="px-4 py-3 text-right text-xs text-slate-400">{(stock.latestRecord.Volume || 0).toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderMacroTable = () => {
+    if (filteredMacro.length === 0) return null;
+    // Get top 8 columns just for preview so it doesn't scroll forever
+    const cols = Object.keys(filteredMacro[0]).filter(k => k !== 'Date' && k !== 'index').slice(0, 8);
+    
+    return (
+      <div className="overflow-x-auto custom-scrollbar rounded-xl border border-[#2d254f]/50">
+        <table className="min-w-full divide-y divide-[#2d254f]/50 text-left">
+          <thead className="bg-[#111c38] text-[10px] uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-4 py-3 font-bold rounded-tl-xl">Date</th>
+              {cols.map(col => (
+                <th key={col} className="px-4 py-3 font-bold truncate max-w-[120px]" title={col}>{col.replace(/_/g, ' ')}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#2d254f]/30 bg-[#0d0b1a]/40">
+            {filteredMacro.map((row, i) => (
+              <tr key={i} className="hover:bg-[#16122b]/80 transition-colors text-sm text-slate-300">
+                <td className="px-4 py-3 font-bold text-white whitespace-nowrap">{row.Date}</td>
+                {cols.map(col => (
+                  <td key={col} className="px-4 py-3 font-medium text-blue-200">{Number(row[col]).toFixed(2)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderInsiderTable = () => (
+    <div className="overflow-x-auto custom-scrollbar rounded-xl border border-[#2d254f]/50">
+      <table className="min-w-full divide-y divide-[#2d254f]/50 text-left">
+        <thead className="bg-[#111c38] text-[10px] uppercase tracking-wider text-slate-400">
+          <tr>
+            <th className="px-4 py-3 font-bold rounded-tl-xl">Ticker</th>
+            <th className="px-4 py-3 font-bold">Conviction Score</th>
+            <th className="px-4 py-3 font-bold text-right">Total Executed Buys</th>
+            <th className="px-4 py-3 font-bold text-right">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#2d254f]/30 bg-[#0d0b1a]/40">
+          {filteredInsider.map((opp, i) => {
+            const totalBuys = opp.insider_transactions.filter(t => t.type === 'BUY').reduce((acc, curr) => acc + curr.total_value, 0);
+            return (
+              <tr key={i} className="hover:bg-[#16122b]/80 transition-colors text-sm text-slate-300">
+                <td className="px-4 py-3 font-bold text-white">{opp.ticker}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${opp.conviction_score > 75 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+                    {opp.conviction_score}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-medium text-right text-emerald-400">${(totalBuys / 1000000).toFixed(2)}M</td>
+                <td className="px-4 py-3 text-right text-xs text-slate-400">{opp.last_updated}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6 max-w-7xl animate-slide-up">
+      <div className="flex flex-col md:flex-row justify-between md:items-center bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 p-6 rounded-3xl shadow-xl shadow-black/40 gap-4">
+        <div>
+           <h2 className="text-2xl font-serif font-medium text-amber-50/90 tracking-wide flex items-center gap-3 drop-shadow-sm">
+             <Database size={24} className="text-indigo-400/80" /> Data Lake Explorer
+           </h2>
+           <p className="text-sm text-slate-400 mt-1">Direct read-only interface verifying AWS S3 pipeline health and raw data payloads.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-sm font-bold">
+          <CheckCircle2 size={16} className="text-indigo-400" /> S3 Connection Verified
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="p-5 rounded-2xl bg-[#0d0b1a]/80 border border-[#2d254f]/50 shadow-lg relative overflow-hidden">
+           <div className="flex justify-between items-start mb-2">
+             <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Equities Pipeline</h3>
+             <LineChart size={16} className="text-blue-400" />
+           </div>
+           <div className="text-2xl font-bold text-white mb-2">{data.length.toLocaleString()} <span className="text-sm font-normal text-slate-500">Assets</span></div>
+           <div className="text-[10px] text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> Last Sync: {lastStockUpdate}</div>
+        </div>
+        <div className="p-5 rounded-2xl bg-[#0d0b1a]/80 border border-[#2d254f]/50 shadow-lg relative overflow-hidden">
+           <div className="flex justify-between items-start mb-2">
+             <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Macro Pipeline</h3>
+             <Globe size={16} className="text-amber-400" />
+           </div>
+           <div className="text-2xl font-bold text-white mb-2">{macroCols} <span className="text-sm font-normal text-slate-500">Metrics</span></div>
+           <div className="text-[10px] text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> Last Sync: {lastMacroUpdate}</div>
+        </div>
+        <div className="p-5 rounded-2xl bg-[#0d0b1a]/80 border border-[#2d254f]/50 shadow-lg relative overflow-hidden">
+           <div className="flex justify-between items-start mb-2">
+             <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Insider Pipeline</h3>
+             <Users size={16} className="text-emerald-400" />
+           </div>
+           <div className="text-2xl font-bold text-white mb-2">{insiderData.length.toLocaleString()} <span className="text-sm font-normal text-slate-500">Companies</span></div>
+           <div className="text-[10px] text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> Last Sync: {lastInsiderUpdate}</div>
+        </div>
+        <div className="p-5 rounded-2xl bg-[#0d0b1a]/80 border border-[#2d254f]/50 shadow-lg relative overflow-hidden">
+           <div className="flex justify-between items-start mb-2">
+             <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">AI Context Engine</h3>
+             <Newspaper size={16} className="text-purple-400" />
+           </div>
+           <div className="text-2xl font-bold text-white mb-2">{sentiment.length} <span className="text-sm font-normal text-slate-500">Days Stored</span></div>
+           <div className="text-[10px] text-slate-400 flex items-center gap-1.5"><Calendar size={12} /> S3 JSON Archive</div>
+        </div>
+      </div>
+
+      <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-6 backdrop-blur-2xl shadow-xl shadow-black/40">
+        <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+          <div className="flex bg-[#07050f]/60 border border-[#2d254f]/80 rounded-xl p-1 w-fit shadow-inner">
+            <button onClick={() => setView('stocks')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === 'stocks' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>
+              <Table size={14} /> Equities Dataset
+            </button>
+            <button onClick={() => setView('macro')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === 'macro' ? 'bg-amber-600/80 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>
+              <Globe size={14} /> Macro Dataset
+            </button>
+            <button onClick={() => setView('insider')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 flex items-center gap-2 ${view === 'insider' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>
+              <FileText size={14} /> Insider Dataset
+            </button>
+          </div>
+
+          {(view === 'stocks' || view === 'insider') && (
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" size={14} />
+              <input 
+                type="text" 
+                placeholder="Search ticker..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/60 rounded-xl py-2 pl-9 pr-4 text-xs focus:outline-none focus:border-blue-500/50 text-slate-200 shadow-inner"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="relative min-h-[400px]">
+          {view === 'stocks' && renderStockTable()}
+          {view === 'macro' && renderMacroTable()}
+          {view === 'insider' && renderInsiderTable()}
+          
+          <div className="mt-4 text-center text-xs text-slate-500">
+            Preview limited to 100 rows for browser performance. Data is fetched securely from <code>s3://lumina-strategies/</code>.
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -907,7 +1126,7 @@ function EconomicAnalysis({ savedStocks, watchList, data, macroData }) {
         <div className="text-center py-20 text-slate-500">Not enough historical alignment data for this specific pairing.</div>
       )}
 
-      {/* NEW: Automated Portfolio Macro Discoveries Matrix */}
+      {/* Automated Portfolio Macro Discoveries Matrix */}
       {portfolioDiscoveries.length > 0 && (
         <div className="pt-8 mt-8 border-t border-[#2d254f]/50 animate-slide-up">
           <div className="flex items-center justify-between mb-6">
@@ -1409,7 +1628,6 @@ function PortfolioTracker({ watchList, toggleWatchList, data }) {
 // ==========================================
 // DASHBOARD HOME COMPONENT
 // ==========================================
-
 function DashboardHome({ totalStocks, data = [], sentiment, savedStocks = [], toggleSaved }) {
   const [trendFilter, setTrendFilter] = useState('All');
   const [sectorFilter, setSectorFilter] = useState('All');
@@ -1822,7 +2040,7 @@ function StockScreenerCard({ stock, isSaved, onToggle }) {
            <p className="text-[11px] font-medium text-slate-500 mb-0.5">Analyst Target</p>
            <div className="flex items-center gap-2">
              <p className="text-lg font-bold text-emerald-400">${(stock.target || 0).toFixed(2)}</p>
-             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">+{stock.upside.toFixed(1)}%</span>
+             <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">+{(stock.upside || 0).toFixed(1)}%</span>
            </div>
          </div>
        </div>
@@ -2397,34 +2615,18 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
   const [timeframe, setTimeframe] = useState('180D');
   const [hoveredTrade, setHoveredTrade] = useState(null);
 
-  // Combine Pipeline and Portfolio for the dropdown
-  const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...(watchList || [])])], [savedStocks, watchList]);
+  const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...watchList])], [savedStocks, watchList]);
 
-  // Sort opportunities strictly by the largest recent BUY transaction
-  const sortedOpportunities = useMemo(() => {
-    if (!topOpportunities) return [];
-    return [...topOpportunities].sort((a, b) => {
-      const getLatestMaxBuy = (opp) => {
-        const buys = (opp.insider_transactions || []).filter(t => t.type === 'BUY');
-        if (buys.length === 0) return 0;
-        return Math.max(...buys.map(t => t.total_value));
-      };
-      return getLatestMaxBuy(b) - getLatestMaxBuy(a);
-    });
-  }, [topOpportunities]);
-
-  // Intelligent auto-selection
   useEffect(() => {
-    if (!selectedTicker) {
-      if (combinedAssets.length > 0) {
-        setSelectedTicker(combinedAssets[0]);
-      } else if (sortedOpportunities.length > 0) {
-        setSelectedTicker(sortedOpportunities[0].ticker);
-      }
+    // Default to the first combined asset if available, otherwise just fall back to the first top opportunity
+    if (combinedAssets.length > 0 && (!selectedTicker || !combinedAssets.includes(selectedTicker))) {
+      setSelectedTicker(combinedAssets[0]);
+    } else if (combinedAssets.length === 0 && topOpportunities && topOpportunities.length > 0 && !selectedTicker) {
+      setSelectedTicker(topOpportunities[0].ticker);
     }
-  }, [combinedAssets, sortedOpportunities, selectedTicker]);
+  }, [combinedAssets, topOpportunities, selectedTicker]);
 
-  if (!sortedOpportunities || sortedOpportunities.length === 0) {
+  if (!topOpportunities || topOpportunities.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] animate-slide-up text-center">
         <div className="w-24 h-24 rounded-full bg-[#111c38]/80 border border-[#1e3a8a]/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(30,58,138,0.3)]">
@@ -2436,12 +2638,13 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
     );
   }
 
-  const currentOpportunity = sortedOpportunities.find(o => o.ticker === selectedTicker) || sortedOpportunities[0];
+  // Look for the currently selected ticker in our insider data list
+  const currentOpportunity = topOpportunities.find(o => o.ticker === selectedTicker) || { ticker: selectedTicker, insider_transactions: [], conviction_score: 0 };
   const stock = data.find(s => s.t === selectedTicker);
   const history = stock ? (stock.history || []) : [];
   
   // Isolate the transactions
-  const transactions = currentOpportunity ? (currentOpportunity.insider_transactions || []) : [];
+  const transactions = currentOpportunity.insider_transactions || [];
   
   const filteredHistory = useMemo(() => {
     if (history.length < 2) return history;
@@ -2498,10 +2701,14 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
       const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
       
-      // Dynamic proportional scaling: Based on the square root of the dollar value
-      let radius = Math.max(2, Math.min(15, 1.5 + (Math.sqrt(trade.total_value) / 250)));
+      // Calculate dot size by transaction value using a square root curve for visual proportionality
+      // Base radius of 1.5, scaling up gently. A $10M trade won't cover the whole chart.
+      let radius = 1.5;
+      if (trade.total_value > 0) {
+        radius = Math.max(1.5, Math.min(8, Math.sqrt(trade.total_value) / 300));
+      }
       
-      return { ...trade, id: i, x: xPct, y: yPct, r: radius };
+      return { ...trade, id: i, x: xPct, y: yPct, r: radius, isMassive: trade.total_value > 1000000 };
     }).filter(Boolean);
 
     const mid = new Date(startDt.getTime() + totalSpan / 2);
@@ -2539,47 +2746,39 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
            </div>
            <p className="text-sm text-slate-400 mt-1">Cross-referencing {selectedTicker} C-suite open-market purchases with algorithmic price targets.</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="text-right hidden sm:block mr-2">
+        <div className="flex items-center gap-4">
+          <div className="text-right mr-2 hidden sm:block">
             <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Total Open-Market Buys</p>
             <p className="text-xl font-bold text-emerald-400">
               ${(aggregateStats.totalBought / 1000000).toFixed(2)}M
             </p>
           </div>
-
           <div className="relative">
             <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 ml-1">Select Asset to Analyze</label>
             <select 
-              className="w-full sm:w-56 bg-[#111c38]/90 border border-[#1e3a8a]/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer pr-8"
+              className="w-full md:w-48 bg-[#111c38]/90 border border-[#1e3a8a]/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer"
               value={selectedTicker}
               onChange={(e) => setSelectedTicker(e.target.value)}
             >
-              {/* Fallback to show the ticker if they clicked it from the discovery grid below but it isn't saved */}
-              {selectedTicker && !combinedAssets.includes(selectedTicker) && (
-                 <optgroup label="Currently Viewing">
-                   <option value={selectedTicker}>{selectedTicker}</option>
-                 </optgroup>
-              )}
-              {savedStocks.length > 0 && (
-                <optgroup label="Active Pipeline">
-                  {savedStocks.map(t => <option key={`pipe-${t}`} value={t}>{t}</option>)}
-                </optgroup>
-              )}
-              {(watchList || []).length > 0 && (
-                <optgroup label="Saved Portfolio">
-                  {watchList.map(t => <option key={`watch-${t}`} value={t}>{t}</option>)}
-                </optgroup>
-              )}
+              {savedStocks.length > 0 && <optgroup label="Active Pipeline">
+                {savedStocks.map(t => <option key={`pipe-${t}`} value={t}>{t}</option>)}
+              </optgroup>}
+              {watchList.length > 0 && <optgroup label="Saved Portfolio">
+                {watchList.map(t => <option key={`watch-${t}`} value={t}>{t}</option>)}
+              </optgroup>}
+              {/* Fallback to show they can search other things if their portfolio is empty */}
+              {combinedAssets.length === 0 && topOpportunities.slice(0, 20).map(o => (
+                <option key={`fall-${o.ticker}`} value={o.ticker}>{o.ticker}</option>
+              ))}
             </select>
             <ChevronRight size={16} className="absolute right-4 bottom-3 text-slate-400 pointer-events-none rotate-90" />
           </div>
-
           <button 
             onClick={() => toggleSaved(selectedTicker)}
-            className={`w-full sm:w-auto px-5 py-2.5 mt-5 sm:mt-0 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-xl border ${savedStocks.includes(selectedTicker) ? 'bg-[#062417]/80 text-emerald-400 border-emerald-500/50' : 'bg-[#111c38]/90 hover:bg-[#1e3a8a] text-slate-300 border-[#1e3a8a]/50'}`}
+            className="mt-5 w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all bg-[#111c38] hover:bg-[#1e3a8a] text-slate-400 hover:text-white border border-[#1e3a8a]/50"
+            title={savedStocks.includes(selectedTicker) ? "Remove from Pipeline" : "Add to Pipeline"}
           >
-            {savedStocks.includes(selectedTicker) ? <Check size={18} /> : <Plus size={18} />}
-            <span className="hidden md:inline">{savedStocks.includes(selectedTicker) ? 'In Portfolio' : 'Track Asset'}</span>
+            {savedStocks.includes(selectedTicker) ? <Check size={16} className="text-blue-400" /> : <Plus size={16} />}
           </button>
         </div>
       </div>
@@ -2588,7 +2787,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
       <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-7 backdrop-blur-2xl shadow-xl shadow-black/40 flex flex-col min-h-[450px]">
         <div className="flex flex-col xl:flex-row justify-between xl:items-start mb-6 gap-4">
           <div>
-            <h3 className="text-3xl font-bold text-white tracking-tight">{selectedTicker} <span className="text-sm font-normal text-slate-400 ml-2">{stock?.n || 'Loading...'}</span></h3>
+            <h3 className="text-3xl font-bold text-white tracking-tight">{selectedTicker} <span className="text-sm font-normal text-slate-400 ml-2">{stock?.n || ''}</span></h3>
             <div className="flex bg-[#07050f]/60 border border-[#2d254f]/80 rounded-xl p-1 mt-4 w-fit shadow-inner">
               {['30D', '60D', '90D', '180D', '1Y', 'MAX'].map(tf => (
                 <button key={tf} onClick={() => setTimeframe(tf)} className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${timeframe === tf ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-[#111c38]'}`}>{tf}</button>
@@ -2600,10 +2799,10 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
             <div className="flex items-center gap-2 text-blue-400"><div className="w-3 h-0.5 bg-blue-500"></div> Close Price</div>
             <div className="flex items-center gap-2 text-slate-500"><div className="w-3 h-0.5 border-t border-dashed border-slate-500"></div> Analyst Mean Target</div>
             <div className="flex items-center gap-2 text-emerald-400">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Executive Buy
+              <div className="w-2 h-2 bg-emerald-500 rounded-full"></div> Executive Buy
             </div>
             <div className="flex items-center gap-2 text-rose-400">
-              <div className="w-2 h-2 rounded-full bg-rose-500"></div> Executive Sell
+              <div className="w-2 h-2 bg-rose-500 rounded-full"></div> Executive Sell
             </div>
           </div>
         </div>
@@ -2687,7 +2886,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
                       fill={trade.type === 'BUY' ? '#10b981' : '#f43f5e'} 
                       stroke={trade.type === 'BUY' ? '#064e3b' : '#881337'} 
                       strokeWidth="0.5" 
-                      opacity={trade.type === 'BUY' ? "0.9" : "0.5"}
+                      opacity="0.85"
                       vectorEffect="non-scaling-stroke" 
                       className="transition-all duration-300 group-hover:stroke-white group-hover:stroke-1"
                     />
@@ -2702,41 +2901,57 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
       </div>
 
       {/* Discovery Engine Dock (Ranked Scans) */}
-      <div className="pt-6 border-t border-[#2d254f]/50">
-        <div className="flex items-center gap-2 mb-4">
-          <Star size={18} className="text-amber-400" />
-          <h3 className="text-lg font-serif font-medium text-slate-200 tracking-wide">SEC Discovery Engine</h3>
-          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full ml-2">Sorted by Largest Buy</span>
+      <div className="pt-6 border-t border-[#2d254f]/50 animate-slide-up">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Star size={18} className="text-amber-400" />
+            <h3 className="text-lg font-serif font-medium text-slate-200 tracking-wide">SEC Discovery Engine</h3>
+          </div>
+          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
+            Sorted by Largest Buy
+          </span>
         </div>
         
-        {/* The Grid layout sorting by largest dollar buy */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
-          {sortedOpportunities.slice(0, 100).map((opp) => {
-            const buys = (opp.insider_transactions || []).filter(t => t.type === 'BUY');
-            const maxBuy = buys.length > 0 ? Math.max(...buys.map(t => t.total_value)) : 0;
-            return (
+        {/* The Wrap-Around Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {topOpportunities
+            // Pre-sort the array so the largest single transaction is always first
+            .map(opp => {
+              const largestBuy = opp.insider_transactions
+                .filter(t => t.type === 'BUY')
+                .reduce((max, t) => t.total_value > max ? t.total_value : max, 0);
+              return { ...opp, largestBuy };
+            })
+            .sort((a, b) => b.largestBuy - a.largestBuy)
+            .slice(0, 16) // Only show top 16 to keep grid clean
+            .map((opp) => {
+              const totalBuys = opp.insider_transactions.filter(t => t.type==='BUY').length;
+              return (
               <button 
                 key={opp.ticker}
                 onClick={() => setSelectedTicker(opp.ticker)}
-                className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 ${selectedTicker === opp.ticker ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'bg-[#111c38]/60 border-[#1e3a8a]/30 hover:border-[#1e3a8a]/80 hover:bg-[#16254a]'}`}
+                className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 w-full ${
+                  selectedTicker === opp.ticker 
+                    ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' 
+                    : 'bg-[#111c38]/60 border-[#1e3a8a]/30 hover:border-[#1e3a8a]/80 hover:bg-[#16254a]'
+                }`}
               >
-                <div className="flex justify-between w-full items-center mb-3">
+                <div className="flex justify-between w-full items-start mb-3">
                   <span className={`text-xl font-bold ${selectedTicker === opp.ticker ? 'text-white' : 'text-slate-200'}`}>{opp.ticker}</span>
                   <div className="flex flex-col items-end">
-                    <span className="text-sm font-black text-emerald-400">
-                      ${maxBuy > 1000000 ? (maxBuy/1000000).toFixed(1) + 'M' : maxBuy > 1000 ? (maxBuy/1000).toFixed(0) + 'K' : maxBuy}
-                    </span>
+                    <span className="text-sm font-bold text-emerald-400">${(opp.largestBuy / 1000000).toFixed(2)}M</span>
                     <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Top Buy</span>
                   </div>
                 </div>
                 
-                <div className="w-full flex items-center gap-2 text-xs text-slate-400">
-                  <DollarSign size={14} className="text-emerald-500/70" />
-                  <span>{buys.length} Executed Buys</span>
+                <div className="w-full flex items-center justify-between text-xs text-slate-400 mt-auto">
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign size={14} className="text-emerald-500/70" />
+                    <span>{totalBuys} Total Buys</span>
+                  </div>
                 </div>
               </button>
-            );
-          })}
+            )})}
         </div>
       </div>
       

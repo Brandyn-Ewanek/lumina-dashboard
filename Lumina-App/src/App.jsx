@@ -2615,16 +2615,20 @@ function AINewsEngine({ savedStocks, watchList, data }) {
 function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, watchList }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [timeframe, setTimeframe] = useState('180D');
+  const [discoveryTimeframe, setDiscoveryTimeframe] = useState('180D');
   const [hoveredTrade, setHoveredTrade] = useState(null);
 
   const combinedAssets = useMemo(() => [...new Set([...savedStocks, ...watchList])], [savedStocks, watchList]);
 
   useEffect(() => {
-    // Default to the first combined asset if available, otherwise just fall back to the first top opportunity
-    if (combinedAssets.length > 0 && (!selectedTicker || !combinedAssets.includes(selectedTicker))) {
-      setSelectedTicker(combinedAssets[0]);
-    } else if (combinedAssets.length === 0 && topOpportunities && topOpportunities.length > 0 && !selectedTicker) {
-      setSelectedTicker(topOpportunities[0].ticker);
+    // FIX: Only set a default if the screen is completely blank on initial load.
+    // This stops the dashboard from rejecting your clicks in the Discovery grid!
+    if (!selectedTicker) {
+      if (combinedAssets.length > 0) {
+        setSelectedTicker(combinedAssets[0]);
+      } else if (topOpportunities && topOpportunities.length > 0) {
+        setSelectedTicker(topOpportunities[0].ticker);
+      }
     }
   }, [combinedAssets, topOpportunities, selectedTicker]);
 
@@ -2735,6 +2739,43 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
     return { totalBought, uniqueBuyers: highConvictionBuyers.size };
   }, [transactions]);
 
+  // NEW: Dedicated filtering logic for the Discovery Engine grid
+  const filteredOpportunities = useMemo(() => {
+    let days = 9000; // MAX
+    if (discoveryTimeframe === '30D') days = 30;
+    if (discoveryTimeframe === '60D') days = 60;
+    if (discoveryTimeframe === '90D') days = 90;
+    if (discoveryTimeframe === '180D') days = 180;
+    if (discoveryTimeframe === '1Y') days = 365;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    return topOpportunities.map(opp => {
+      // 1. Filter trades to only include buys within our selected timeframe
+      const validTrades = opp.insider_transactions.filter(t => {
+        if (t.type !== 'BUY') return false;
+        if (discoveryTimeframe === 'MAX') return true;
+        return new Date(t.date) >= cutoff;
+      });
+
+      // 2. Recalculate the largest buy based ONLY on those valid trades
+      const largestBuy = validTrades.reduce((max, t) => t.total_value > max ? t.total_value : max, 0);
+      const totalBuys = validTrades.length;
+
+      return { ...opp, largestBuy, totalBuys };
+    })
+    .filter(opp => opp.largestBuy > 0) // Hide companies with $0 buys in this timeframe
+    .sort((a, b) => b.largestBuy - a.largestBuy)
+    .slice(0, 16);
+  }, [topOpportunities, discoveryTimeframe]);
+
+  // Helper for massive numbers
+  const formatBigMoney = (val) => {
+    if (val >= 1000000000) return `$${(val / 1000000000).toFixed(2)}B`;
+    return `$${(val / 1000000).toFixed(2)}M`;
+  };
+
   return (
     <div className="max-w-7xl space-y-6 animate-slide-up" style={{ animationDuration: '0.3s' }}>
       
@@ -2762,13 +2803,15 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
               value={selectedTicker}
               onChange={(e) => setSelectedTicker(e.target.value)}
             >
+              {!combinedAssets.includes(selectedTicker) && selectedTicker && (
+                <option value={selectedTicker}>{selectedTicker} (Discovery)</option>
+              )}
               {savedStocks.length > 0 && <optgroup label="Active Pipeline">
                 {savedStocks.map(t => <option key={`pipe-${t}`} value={t}>{t}</option>)}
               </optgroup>}
               {watchList.length > 0 && <optgroup label="Saved Portfolio">
                 {watchList.map(t => <option key={`watch-${t}`} value={t}>{t}</option>)}
               </optgroup>}
-              {/* Fallback to show they can search other things if their portfolio is empty */}
               {combinedAssets.length === 0 && topOpportunities.slice(0, 20).map(o => (
                 <option key={`fall-${o.ticker}`} value={o.ticker}>{o.ticker}</option>
               ))}
@@ -2904,34 +2947,40 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
 
       {/* Discovery Engine Dock (Ranked Scans) */}
       <div className="pt-6 border-t border-[#2d254f]/50 animate-slide-up">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-2">
             <Star size={18} className="text-amber-400" />
             <h3 className="text-lg font-serif font-medium text-slate-200 tracking-wide">SEC Discovery Engine</h3>
           </div>
-          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
-            Sorted by Largest Buy
-          </span>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex bg-[#07050f]/60 border border-[#2d254f]/80 rounded-xl p-1 shadow-inner">
+              {['30D', '60D', '90D', '180D', '1Y', 'MAX'].map(tf => (
+                <button 
+                  key={`disc-${tf}`} 
+                  onClick={() => setDiscoveryTimeframe(tf)} 
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-200 ${discoveryTimeframe === tf ? 'bg-amber-600/80 text-white shadow-md' : 'text-slate-400 hover:text-amber-200 hover:bg-[#111c38]'}`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+            <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/30 px-3 py-1 rounded-full font-bold whitespace-nowrap">
+              Sorted by Largest Buy
+            </span>
+          </div>
         </div>
         
         {/* The Wrap-Around Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {topOpportunities
-            // Pre-sort the array so the largest single transaction is always first
-            .map(opp => {
-              const largestBuy = opp.insider_transactions
-                .filter(t => t.type === 'BUY')
-                .reduce((max, t) => t.total_value > max ? t.total_value : max, 0);
-              return { ...opp, largestBuy };
-            })
-            .sort((a, b) => b.largestBuy - a.largestBuy)
-            .slice(0, 16) // Only show top 16 to keep grid clean
-            .map((opp) => {
-              const totalBuys = opp.insider_transactions.filter(t => t.type==='BUY').length;
-              return (
+          {filteredOpportunities.map((opp) => (
               <button 
                 key={opp.ticker}
-                onClick={() => setSelectedTicker(opp.ticker)}
+                onClick={() => {
+                    setSelectedTicker(opp.ticker);
+                    // Scroll smoothly back to the top chart when clicked
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 w-full ${
                   selectedTicker === opp.ticker 
                     ? 'bg-[#10142b]/90 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.2)]' 
@@ -2941,7 +2990,7 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
                 <div className="flex justify-between w-full items-start mb-3">
                   <span className={`text-xl font-bold ${selectedTicker === opp.ticker ? 'text-white' : 'text-slate-200'}`}>{opp.ticker}</span>
                   <div className="flex flex-col items-end">
-                    <span className="text-sm font-bold text-emerald-400">${(opp.largestBuy / 1000000).toFixed(2)}M</span>
+                    <span className="text-sm font-bold text-emerald-400">{formatBigMoney(opp.largestBuy)}</span>
                     <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Top Buy</span>
                   </div>
                 </div>
@@ -2949,11 +2998,16 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
                 <div className="w-full flex items-center justify-between text-xs text-slate-400 mt-auto">
                   <div className="flex items-center gap-1.5">
                     <DollarSign size={14} className="text-emerald-500/70" />
-                    <span>{totalBuys} Total Buys</span>
+                    <span>{opp.totalBuys} Total Buys</span>
                   </div>
                 </div>
               </button>
-            )})}
+            ))}
+            {filteredOpportunities.length === 0 && (
+              <div className="col-span-full py-8 text-center text-slate-500 text-sm">
+                No insider buys found in this timeframe.
+              </div>
+            )}
         </div>
       </div>
       

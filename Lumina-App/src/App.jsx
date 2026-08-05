@@ -2675,10 +2675,9 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
     const targets = displayHistory.map(r => r.Target_Mean_Price || r.Close_Price);
     
     const allVals = [...prices, ...targets];
-    // Include the transaction prices in the bounds to make sure pins don't fall off the chart
-    transactions.forEach(t => {
-       if (t.price > 0) allVals.push(t.price);
-    });
+    // FIX: We no longer push transaction prices into allVals to calculate the Y-Axis.
+    // SEC filings often contain typos (e.g., a $24M total value typed in the price column)
+    // or deep-discount option exercises. This prevents the chart from being squished.
 
     const minVal = Math.min(...allVals) * 0.95; 
     const maxVal = Math.max(...allVals) * 1.05;
@@ -2705,10 +2704,23 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
       if (tradeDt < startDt || tradeDt > endDt) return null;
       
       const xPct = ((tradeDt.getTime() - startDt.getTime()) / totalSpan) * 100;
-      const yPct = 100 - ((trade.price - minVal) / (maxVal - minVal)) * 100;
+      
+      // FIX: Anchor the dot perfectly to the historical stock price line on that date
+      // This prevents the dot from floating wildly off the chart if the SEC data is dirty
+      let anchorPrice = trade.price;
+      let minTimeDiff = Infinity;
+      displayHistory.forEach(r => {
+         const rTime = new Date(r.Date).getTime();
+         const diff = Math.abs(rTime - tradeDt.getTime());
+         if (diff < minTimeDiff) {
+             minTimeDiff = diff;
+             anchorPrice = r.Close_Price;
+         }
+      });
+
+      const yPct = 100 - ((anchorPrice - minVal) / (maxVal - minVal)) * 100;
       
       // Calculate dot size by transaction value using a square root curve for visual proportionality
-      // Base radius of 1.5, scaling up gently. A $10M trade won't cover the whole chart.
       let radius = 1.5;
       if (trade.total_value > 0) {
         radius = Math.max(1.5, Math.min(8, Math.sqrt(trade.total_value) / 300));

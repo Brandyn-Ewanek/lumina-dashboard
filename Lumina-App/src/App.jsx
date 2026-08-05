@@ -139,7 +139,8 @@ export default function App() {
       try {
         // 1. Fetch Stocks
         for (const index of INDEXES) {
-          const fileUrl = `${S3_BUCKET_URL}/data/today/${index.id}_latest.csv`;
+          // CRITICAL FIX: Added ?t=${Date.now()} to bust the browser cache!
+          const fileUrl = `${S3_BUCKET_URL}/data/today/${index.id}_latest.csv?t=${Date.now()}`;
           try {
             const response = await fetch(fileUrl);
             if (!response.ok) continue;
@@ -160,7 +161,8 @@ export default function App() {
 
         // 2. Fetch Global Macro
         try {
-          const macroUrl = `${S3_BUCKET_URL}/data/macro/global_macro_latest.csv`;
+          // Cache bust macro too
+          const macroUrl = `${S3_BUCKET_URL}/data/macro/global_macro_latest.csv?t=${Date.now()}`;
           const macroRes = await fetch(macroUrl);
           if (macroRes.ok) {
             const macroText = await macroRes.text();
@@ -172,7 +174,7 @@ export default function App() {
 
         // 3. Fetch Sentiment & Watchlist
         try {
-          const sentimentUrl = `${S3_BUCKET_URL}/dashboard/sentiment/sentiment.json`;
+          const sentimentUrl = `${S3_BUCKET_URL}/dashboard/sentiment/sentiment.json?t=${Date.now()}`;
           const sentResponse = await fetch(sentimentUrl);
           if (sentResponse.ok) {
             const sentData = await sentResponse.json();
@@ -181,7 +183,7 @@ export default function App() {
         } catch (err) {}
 
         try {
-          const watchlistUrl = `${S3_BUCKET_URL}/dashboard/watchlist/watchlist.json`;
+          const watchlistUrl = `${S3_BUCKET_URL}/dashboard/watchlist/watchlist.json?t=${Date.now()}`;
           const watchResponse = await fetch(watchlistUrl);
           if (watchResponse.ok) {
             const watchData = await watchResponse.json();
@@ -192,7 +194,7 @@ export default function App() {
         }
 
         try {
-          const insiderUrl = `${S3_BUCKET_URL}/dashboard/insider_trading/ranked_opportunities.json`;
+          const insiderUrl = `${S3_BUCKET_URL}/dashboard/insider_trading/ranked_opportunities.json?t=${Date.now()}`;
           const insiderResponse = await fetch(insiderUrl);
           if (insiderResponse.ok) {
             const insData = await insiderResponse.json();

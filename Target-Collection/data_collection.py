@@ -234,6 +234,30 @@ def get_yahoo_data(ticker, index_name):
             return {'Ticker': ticker, 'Error': 'No valid pricing data found.'}
 
         close = info.get('regularMarketPreviousClose', info.get('previousClose', info.get('currentPrice')))
+        
+        # --- NEW LOGIC: Fetch Top 5 Recent News Articles ---
+        try:
+            raw_news = stock.news
+            news_items = []
+            if raw_news:
+                for article in raw_news[:5]:
+                    title = article.get('title', 'No Title')
+                    publisher = article.get('publisher', 'Unknown Publisher')
+                    pub_time = article.get('providerPublishTime')
+                    
+                    if pub_time:
+                        date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d')
+                    else:
+                        date_str = "Unknown Date"
+                        
+                    news_items.append(f"[{date_str}] {title} ({publisher})")
+                
+                news_block = " | ".join(news_items)
+            else:
+                news_block = "No recent news available."
+        except Exception as e:
+            news_block = f"Error fetching news: {str(e)}"
+        # ---------------------------------------------------
 
         dict_rating = {
             'Ticker': ticker,
@@ -297,7 +321,10 @@ def get_yahoo_data(ticker, index_name):
             'fiftyTwoWeekLow': info.get('fiftyTwoWeekLow'),
             'sharesShort': info.get('sharesShort'),
             'shortPercentOfFloat': info.get('shortPercentOfFloat'),
-            'floatShares': info.get('floatShares')
+            'floatShares': info.get('floatShares'),
+            
+            # The newly extracted news string
+            'recent_news': news_block
         }
         
         if dict_rating['target_mean'] and dict_rating['close']:

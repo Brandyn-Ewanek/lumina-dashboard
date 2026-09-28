@@ -1,0 +1,34 @@
+{
+  "document_id": "m&a-breakdowns-market-impact",
+  "file_name": "M&A Breakdowns Market Impact.pdf",
+  "title": "M&A Breakdowns Market Impact",
+  "target_s3_uri": "s3://lumina-strategies/data/research/market-impact-research/M&A Breakdowns Market Impact.pdf",
+  "s3_prefix": "data/research/market-impact-research/M&A Breakdowns Market Impact.pdf",
+  "vector_store": {
+    "pinecone_index": "lumina-news-impact",
+    "namespace": "historical-precedents"
+  },
+  "document_metrics": {
+    "page_count": 23,
+    "character_count": 74859,
+    "file_size_bytes": 472878,
+    "generated_at_utc": "2026-09-28T09:22:43Z"
+  },
+  "research_context": {
+    "catalyst_type": "MA_Breakdown_Capital_Allocation",
+    "category": "Corporate_Action",
+    "description": "Evaluation of failed acquisitions, regulatory deal blocks, breakup fee impacts, and capital preservation versus lost growth runways.",
+    "targeted_sectors": [
+      "Technology",
+      "Healthcare",
+      "Financials",
+      "Media"
+    ],
+    "historical_severity_bias": "Low-to-Moderate",
+    "key_recovery_metrics": [
+      "Return on Invested Capital (ROIC)",
+      "Debt-to-Equity",
+      "Share Repurchase Resumption"
+    ]
+  }
+}

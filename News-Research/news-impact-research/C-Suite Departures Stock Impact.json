@@ -1,0 +1,33 @@
+{
+  "document_id": "c-suite-departures-stock-impact",
+  "file_name": "C-Suite Departures Stock Impact.pdf",
+  "title": "C-Suite Departures Stock Impact",
+  "target_s3_uri": "s3://lumina-strategies/data/research/market-impact-research/C-Suite Departures Stock Impact.pdf",
+  "s3_prefix": "data/research/market-impact-research/C-Suite Departures Stock Impact.pdf",
+  "vector_store": {
+    "pinecone_index": "lumina-news-impact",
+    "namespace": "historical-precedents"
+  },
+  "document_metrics": {
+    "page_count": 18,
+    "character_count": 62090,
+    "file_size_bytes": 399483,
+    "generated_at_utc": "2026-09-28T09:22:39Z"
+  },
+  "research_context": {
+    "catalyst_type": "Executive_Turnover",
+    "category": "Governance_Leadership",
+    "description": "Historical stock price trajectories following abrupt CEO, CFO, or COO resignations, separating planned successions from ethical/fraudulent departures.",
+    "targeted_sectors": [
+      "Cross-Sector",
+      "Technology",
+      "Financials"
+    ],
+    "historical_severity_bias": "Low-to-Moderate",
+    "key_recovery_metrics": [
+      "Interim Management Credibility",
+      "Guidance Reaffirmation",
+      "Capital Allocation Discipline"
+    ]
+  }
+}

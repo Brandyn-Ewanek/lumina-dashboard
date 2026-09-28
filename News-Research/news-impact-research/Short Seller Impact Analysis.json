@@ -1,0 +1,34 @@
+{
+  "document_id": "short-seller-impact-analysis",
+  "file_name": "Short Seller Impact Analysis.pdf",
+  "title": "Short Seller Impact Analysis",
+  "target_s3_uri": "s3://lumina-strategies/data/research/market-impact-research/Short Seller Impact Analysis.pdf",
+  "s3_prefix": "data/research/market-impact-research/Short Seller Impact Analysis.pdf",
+  "vector_store": {
+    "pinecone_index": "lumina-news-impact",
+    "namespace": "historical-precedents"
+  },
+  "document_metrics": {
+    "page_count": 20,
+    "character_count": 48547,
+    "file_size_bytes": 399481,
+    "generated_at_utc": "2026-09-28T09:22:46Z"
+  },
+  "research_context": {
+    "catalyst_type": "Short_Seller_Accounting_Probe",
+    "category": "Forensic_Governance",
+    "description": "Price impact of short-seller campaign publications, differentiating aggressive accounting opinions from verified balance-sheet fraud.",
+    "targeted_sectors": [
+      "Technology",
+      "Specialty Finance",
+      "Consumer Cyclicals",
+      "Industrials"
+    ],
+    "historical_severity_bias": "High-Variance",
+    "key_recovery_metrics": [
+      "Cash Flow to Net Income Divergence",
+      "Auditor Resignation Checks",
+      "Independent Board Review Findings"
+    ]
+  }
+}

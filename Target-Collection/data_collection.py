@@ -10,105 +10,156 @@ from io import StringIO
 
 def get_sp500_tickers():
     tickers = [
+        # Software
         'ADBE', 'ADSK', 'AKAM', 'ANSS', 'CDNS', 'CRM', 'CTAS', 'CTSH', 'EPAM', 'FFIV',
         'FIS', 'FISV', 'FTNT', 'INTU', 'IT', 'MSFT', 'NOW', 'NLOK', 'NTAP', 'NVDA',
         'ORCL', 'PAYC', 'PTC', 'SNPS', 'TYL', 'VRSN', 'ZM', 'ADP', 'CDK', 'DASH',
         'DAY', 'FICO', 'HUBS', 'PANW', 'PAYX', 'WDAY', 'DDOG', 'CRWD', 'MDB', 'OKTA',
-        'PLTR', 'SNOW', 'TEAM', 'ZS', 'ALTI', 'AI', 'AAPL', 'AMD', 'AMAT', 'APH', 
-        'ARW', 'AVGO', 'CCI', 'CSCO', 'GLW', 'HPE', 'HPQ', 'INTC', 'KEYS', 'KLAC', 
-        'LRCX', 'MCHP', 'MU', 'MSI', 'NXPI', 'QCOM', 'QRVO', 'STX', 'SWKS', 'TEL', 
-        'TER', 'TXN', 'XLNX', 'ZBRA', 'ADI', 'JNPR', 'TRMB', 'ASML', 'SMCI', 'TSM', 
-        'CLS', 'MRVL', 'ACN', 'CDW', 'COGN', 'DXC', 'GPN', 'IBM', 'IQV', 'LDOS',
-        'MMC', 'AON', 'BR', 'JKHY', 'ROP', 'V', 'MA', 'PYPL', 'ABBV', 'AGN', 'AMGN', 
-        'BIIB', 'BMY', 'GILD', 'INCY', 'JNJ', 'LLY', 'MRK', 'MRNA', 'OGN', 'PFE', 
-        'REGN', 'VRTX', 'ZTS', 'ABT', 'BAX', 'BDX', 'BIO', 'BSX', 'CAH', 'COO', 
-        'DHR', 'EW', 'HOLX', 'IDXX', 'ISRG', 'MDT', 'MCK', 'STE', 'SYK', 'TFX', 
-        'TMO', 'ZBH', 'A', 'ALGN', 'PODD', 'RMD', 'TECH', 'WAT', 'WST', 'AET', 
-        'ANTM', 'CI', 'CNC', 'CVS', 'DGX', 'DVA', 'HCA', 'HUM', 'LH', 'UHS',
-        'UNH', 'COR', 'ELV', 'EVH', 'BAC', 'BBT', 'BEN', 'BK', 'BLK', 'C', 'CFG', 
-        'CMA', 'COF', 'DFS', 'FITB', 'FRC', 'HBAN', 'HIG', 'JPM', 'KEY', 'KMI', 
-        'M&T', 'MET', 'MS', 'NTRS', 'PNC', 'RF', 'RJF', 'SBNY', 'SCHW', 'SIVB', 
-        'STT', 'TFC', 'TRV', 'USB', 'WFC', 'ZION', 'AJG', 'GS', 'SPGI', 'MCO', 
-        'NDAQ', 'AFL', 'AIG', 'AIZ', 'ALL', 'AXP', 'BRK.B', 'CB', 'CINF', 'CME', 
-        'GL', 'LNC', 'PRU', 'RE', 'WRB', 'ACGL', 'BRO', 'FDS', 'PFG', 'PGR',
-        'AMP', 'APO', 'IVZ', 'MKTX', 'MSCI', 'TROW', 'BX', 'ICE', 'KKR', 'HOOD',
+        'PLTR', 'SNOW', 'TEAM', 'ZS', 'ALTI','AI', 'PLTR',
+        # Hardware
+        'AAPL', 'AMD', 'AMAT', 'APH', 'ARW', 'AVGO', 'CCI', 'CSCO', 'GLW', 'HPE', 'HPQ',
+        'INTC', 'KEYS', 'KLAC', 'LRCX', 'MCHP', 'MU', 'MSI', 'NXPI', 'QCOM', 'QRVO',
+        'STX', 'SWKS', 'TEL', 'TER', 'TXN', 'XLNX', 'ZBRA', 'ADI', 'JNPR', 'TRMB',
+        'ASML', 'SMCI', 'TSM', 'CLS', 'MRVL',
+        # IT Services & Consulting
+        'ACN', 'CDW', 'COGN', 'DXC', 'FIS', 'FISV', 'GPN', 'IBM', 'IQV', 'LDOS',
+        'MMC', 'AON', 'BR', 'JKHY', 'ROP', 'V', 'MA', 'PYPL',
+        # Pharmaceuticals
+        'ABBV', 'AGN', 'AMGN', 'BIIB', 'BMY', 'GILD', 'INCY', 'JNJ', 'LLY', 'MRK',
+        'MRNA', 'OGN', 'PFE', 'REGN', 'VRTX','ZTS',
+        # Medical Devices & Supplies
+        'ABT', 'BAX', 'BDX', 'BIO', 'BSX', 'CAH', 'COO', 'DHR', 'EW', 'HOLX', 'IDXX',
+        'ISRG', 'MDT', 'MCK', 'STE', 'SYK', 'TFX', 'TMO', 'ZBH','A', 'ALGN', 'PODD',
+        'RMD', 'TECH', 'WAT', 'WST',
+        # Healthcare Services
+        'AET', 'ANTM', 'CI', 'CNC', 'CVS', 'DGX', 'DVA', 'HCA', 'HUM', 'LH', 'UHS',
+        'UNH','COR', 'ELV', 'EVH',
+        # Banks
+        'BAC', 'BBT', 'BEN', 'BK', 'BLK', 'C', 'CFG', 'CMA', 'COF', 'DFS', 'FITB',
+        'FRC', 'HBAN', 'HIG', 'JPM', 'KEY', 'KMI', 'M&T', 'MET', 'MS', 'NTRS', 'PNC',
+        'RF', 'RJF', 'SBNY', 'SCHW', 'SIVB', 'STT', 'TFC', 'TRV', 'USB', 'WFC',
+        'ZION', 'AJG', 'GS', 'SPGI', 'MCO', 'NDAQ',
+        # Insurance
+        'AFL', 'AIG', 'AIZ', 'ALL', 'AXP', 'BRK.B', 'CB', 'CINF', 'CME', 'GL', 'LNC',
+        'MMC', 'PRU', 'RE', 'TRV', 'WRB','ACGL', 'AON', 'BRO', 'FDS', 'PFG', 'PGR',
+        # Investment Management
+        'AMP', 'APO', 'AXP', 'BLK', 'BR', 'IVZ', 'MKTX', 'MSCI', 'TROW', 'BX',
+        'ICE', 'KKR', 'HOOD',
+        # Retail
         'AMZN', 'AZO', 'BBWI', 'BBY', 'COST', 'DG', 'DLTR', 'DPZ', 'EBAY', 'EXPE',
         'F', 'GPS', 'HD', 'KMX', 'KR', 'LOW', 'LVS', 'LYV', 'MCD', 'MHK', 'NCLH',
         'NKE', 'ORLY', 'PENN', 'POOL', 'PVH', 'RCL', 'RL', 'ROST', 'SBUX', 'TGT',
-        'TJX', 'TPR', 'UA', 'UAA', 'ULTA', 'VFC', 'WHR', 'WSM', 'WYNN', 'YUM', 'ABNB',
-        'BKNG', 'CHRW', 'CMG', 'DHI', 'DRI', 'GRMN', 'HLT', 'MAR', 'NVR',
-        'PHM', 'ROK', 'SHW', 'WM', 'GM', 'HOG', 'LKQ', 'PCAR', 'TSLA', 'NIO',
-        'CMCSA', 'DIS', 'DISCA', 'DISCK', 'DISH', 'FOX', 'FOXA', 'MTCH',
+        'TJX', 'TPR', 'UA', 'UAA', 'ULTA', 'VFC', 'WHR', 'WSM', 'WYNN', 'YUM','ABNB',
+        'BKNG', 'CHRW', 'CMG', 'DHI', 'DRI', 'GPN', 'GRMN', 'HLT', 'MAR', 'NVR',
+        'PHM', 'ROK', 'SHW', 'TJX', 'WM',
+        # Automobiles
+        'F', 'GM', 'HOG', 'LKQ', 'PCAR', 'TSLA', 'NIO',
+        # Media & Entertainment
+        'CMCSA', 'DIS', 'DISCA', 'DISCK', 'DISH', 'FOX', 'FOXA', 'LYV', 'MTCH',
         'NFLX', 'NWSA', 'NWS', 'TWTR', 'WBD', 'GOOG', 'GOOGL', 'IPG', 'META',
-        'OMC', 'PARA', 'T', 'TMUS', 'UBER', 'VZ', 'BIDU', 'ADM', 'CAG', 'CPB', 
-        'GIS', 'HRL', 'HSY', 'K', 'KHC', 'KMB', 'KO', 'LW', 'MDLZ', 'MNST', 'MO', 
-        'PEP', 'SJM', 'STZ', 'SYY', 'TAP', 'TSN', 'BF-B', 'KDP', 'MKC', 'CHD', 
-        'CL', 'CLX', 'EL', 'PG', 'BA', 'GD', 'HII', 'HON', 'LHX', 'LMT', 'NOC', 
-        'RTX', 'TXT', 'GE', 'TDG', 'CAT', 'CMI', 'DE', 'DOV', 'EMR', 'ETN', 'EXPD', 
-        'FAST', 'FMC', 'FTV', 'HWM', 'IR', 'ITW', 'JCI', 'MAS', 'MLM', 'MMM', 'PH', 
-        'PNR', 'SNA', 'SWK', 'TT', 'URI', 'VMC', 'WAB', 'AOS', 'AME', 'CARR', 
-        'CSX', 'DAL', 'GNRC', 'LUV', 'NSC', 'OTIS', 'UAL', 'UNP', 'UPS', 'XYL', 
-        'XMTR', 'PRLB', 'AAL', 'ALLE', 'AVY', 'BALL', 'CF', 'DRE', 'ECL', 'EFX', 
-        'ESS', 'FLR', 'GPC', 'J', 'LEN', 'LUMN', 'PKG', 'PLD', 'PWR', 'RSG', 'SEE', 
-        'SPG', 'VNO', 'WELL', 'WRK', 'BLDR', 'SITE', 'APA', 'COP', 'CTRA', 'DVN', 
-        'EOG', 'FANG', 'HES', 'MRO', 'MPC', 'OXY', 'PXD', 'SLB', 'VLO', 'XOM', 'CVX',
-        'EPD', 'OKE', 'PSX', 'TRGP', 'WMB', 'ENB', 'BKR', 'FSLR', 'HAL', 'HP',
-        'ENPH', 'NEE', 'SEDG', 'CEG', 'SOL', 'AEE', 'AEP', 'AES', 'ATO', 'AWK', 
-        'CMS', 'CNP', 'D', 'DTE', 'DUK', 'ED', 'EIX', 'ES', 'ETR', 'EVRG', 'EXC', 
-        'FE', 'NI', 'NRG', 'PEG', 'PPL', 'PNW', 'SO', 'SRE', 'WEC', 'XEL', 'LNT', 
-        'WCN', 'ALB', 'APD', 'CE', 'DD', 'DOW', 'EMN', 'IFF', 'LYB', 'MOS', 'PPG',
-        'LIN', 'WLK', 'MX', 'FCX', 'NEM', 'NUE', 'NTR', 'ARE', 'AVB', 'BXP', 'CPT', 
-        'DLR', 'EQIX', 'EQR', 'EXR', 'FRT', 'HST', 'IRM', 'KIM', 'MAA', 'O', 'PEAK', 
-        'PSA', 'REG', 'SBAC', 'UDR', 'AMT', 'WY', 'VTR'
+        'OMC', 'PARA', 'T', 'TMUS', 'UBER', 'VZ','BIDU',
+        # Food & Beverage
+        'ADM', 'CAG', 'CPB', 'GIS', 'HRL', 'HSY', 'K', 'KHC', 'KMB', 'KO', 'LW',
+        'MDLZ', 'MNST', 'MO', 'PEP', 'SJM', 'STZ', 'SYY', 'TAP', 'TSN','BF-B',
+        'KDP', 'MKC',
+        # Household & Personal Products
+        'CHD', 'CL', 'CLX', 'EL', 'KMB', 'PG',
+        # Aerospace & Defense
+        'BA', 'GD', 'HII', 'HON', 'LHX', 'LMT', 'NOC', 'RTX', 'TXT','GE', 'TDG',
+        # Machinery
+        'CAT', 'CMI', 'DE', 'DOV', 'EMR', 'ETN', 'EXPD', 'FAST', 'FMC', 'FTV', 'HWM',
+        'IR', 'ITW', 'JCI', 'MAS', 'MLM', 'MMM', 'PH', 'PNR', 'ROK', 'ROP', 'SNA',
+        'SWK', 'TT', 'URI', 'VMC', 'WAB','AOS', 'AME', 'CARR', 'CSX', 'DAL', 'DE',
+        'GNRC', 'JCI', 'LUV', 'NSC', 'OTIS', 'PCAR', 'PH', 'TT', 'UAL', 'UNP',
+        'UPS', 'XYL','XMTR', 'PRLB',
+        # Construction & Engineering
+        'AAL', 'ALLE', 'AVY', 'BALL', 'CARR', 'CF', 'DHI', 'DRE', 'ECL', 'EFX', 'ESS',
+        'FLR', 'GPC', 'J', 'LEN', 'LUMN', 'OTIS', 'PKG', 'PLD', 'PWR', 'RSG', 'SEE',
+        'SPG', 'TDG', 'VNO', 'WELL', 'WRK', 'XYL','BLDR', 'J', 'LEN', 'MAS', 'SITE',
+        'VMC', 'WST',
+        # Oil & Gas Exploration & Production
+        'APA', 'COP', 'CTRA', 'DVN', 'EOG', 'FANG', 'HES', 'MRO', 'MPC', 'OXY',
+        'PXD', 'SLB', 'VLO', 'XOM','CVX',
+        # Oil & Gas Midstream & Refining
+        'EPD', 'KMI', 'OKE', 'PSX', 'TRGP', 'WMB','MPC', 'ENB',
+        # Oil & Gas Equipment & Services
+        'BKR', 'FSLR', 'HAL', 'HP',
+        # Renewable Energy
+        'ENPH', 'NEE', 'SEDG','CEG', 'SOL',
+        # Electric / Utilities
+        'AEE', 'AEP', 'AES', 'ATO', 'AWK', 'CMS', 'CNP', 'D', 'DTE', 'DUK', 'ED',
+        'EIX', 'ES', 'ETR', 'EVRG', 'EXC', 'FE', 'NEE', 'NI', 'NRG', 'PEG', 'PPL',
+        'PNW', 'SO', 'SRE', 'WEC', 'XEL','LNT','WCN',
+        # Chemicals
+        'ALB', 'APD', 'CE', 'DD', 'DOW', 'EMN', 'IFF', 'LYB', 'MOS', 'PPG',
+        'SHW','LIN', 'WLK', 'MX',
+        # Metals & Mining
+        'FCX', 'NEM', 'NUE', 'NTR',
+        # REITs
+        'ARE', 'AVB', 'BXP', 'CPT', 'CCI', 'DLR', 'DRE', 'EQIX', 'EQR', 'ESS',
+        'EXR', 'FRT', 'HST', 'IRM', 'KIM', 'MAA', 'O', 'PEAK', 'PLD', 'PSA',
+        'REG', 'SBAC', 'SPG', 'UDR', 'VNO', 'WELL','AMT', 'PSA', 'WY', 'VTR'
     ]
     # Replace dots with dashes for US stocks (e.g. BRK.B -> BRK-B)
     return [str(t).replace('.', '-') for t in list(set(tickers))]
 
 def get_sp400_tickers():
     tickers = [
+        # Communication Services
         'IEX', 'LBRDA', 'LBRDK', 'LSXMA', 'LSXMK', 'MTCH', 'NYT', 'OMC', 'SIRI',
-        'WWE', 'Z', 'ZG', 'SATS', 'WMG', 'AAP', 'AN', 'ANF', 'ARMK', 'ALV', 'BBWI', 
-        'BBY', 'BWA', 'BC', 'BLDR', 'BURL', 'CPRI', 'KMX', 'CAVA', 'CZR', 'DECK', 
-        'DKS', 'DPZ', 'DKNG', 'EXPE', 'FIVE', 'FND', 'FL', 'GRMN', 'GIII', 'GPC', 
-        'HAS', 'HGV', 'H', 'JACK', 'KSS', 'LEA', 'LAD', 'LYV', 'LEN', 'M', 'VAC', 
-        'MAT', 'MHK', 'NWL', 'JWN', 'ORLY', 'PAG', 'PLNT', 'POOL', 'PHM', 'RL', 
-        'ROST', 'RCL', 'TPR', 'TSCO', 'TNL', 'ULTA', 'MTN', 'VFC', 'WHR', 'WSM', 
-        'YUM', 'ALLE', 'BJ', 'NXT', 'TPH', 'BF-B', 'CPB', 'CAG', 'CHD', 'CLX', 
-        'DAR', 'EL', 'FLO', 'GIS', 'HRL', 'HSY', 'INGR', 'K', 'KDP', 'KMB', 'LW', 
-        'MKC', 'MDLZ', 'MNST', 'PEP', 'SJM', 'STZ', 'SYY', 'TSN', 'WBA', 'POST', 
-        'ACI', 'BRBR', 'CASY', 'USFD', 'APA', 'BKR', 'COP', 'CVX', 'DVN', 'EOG', 
-        'HAL', 'HES', 'KMI', 'MRO', 'MPC', 'OXY', 'PSX', 'PXD', 'SLB', 'TRGP', 
-        'VLO', 'WMB', 'XOM', 'CLR', 'AM', 'AR', 'TPL', 'VNOM', 'ACGL', 'AFG', 
-        'AFL', 'ALL', 'ALLY', 'AMG', 'AON', 'AXON', 'AIG', 'AIZ', 'AMP', 'AWI', 
-        'AXS', 'BAC', 'BEN', 'BK', 'BLK', 'BRO', 'BRK-B', 'C', 'CBOE', 'CB', 
-        'CINF', 'CMA', 'CFG', 'COF', 'DFS', 'ERIE', 'FDS', 'FITB', 'FHN', 'GL',
-        'GS', 'HBAN', 'HIG', 'IVZ', 'JPM', 'KEY', 'L', 'LNC', 'MKTX', 'MMC', 
-        'MET', 'MCO', 'MS', 'MSCI', 'NDAQ', 'NAVI', 'NTRS', 'ORI', 'PFG', 'PGR', 
-        'PNC', 'PRU', 'RJF', 'RF', 'RE', 'SCHW', 'STT', 'SIVB', 'TFC', 'TRV', 
-        'TROW', 'USB', 'WRB', 'WFC', 'WTW', 'ZION', 'ASB', 'BHF', 'CADE', 'ESNT', 
-        'FULT', 'HLNE', 'IBKR', 'JXN', 'ONB', 'UMBF', 'WAL', 'ACHC', 'AMED', 
-        'AVTR', 'BIO', 'BMRN', 'CRL', 'COO', 'XRAY', 'EHC', 'EXAS', 'EXEL', 
-        'GMED', 'HOLX', 'IDXX', 'PODD', 'IART', 'IQV', 'JAZZ', 'LNTH', 'MASI',
+        'WWE', 'Z', 'ZG','SATS','WMG',
+        # Consumer Discretionary
+        'AAP', 'AN', 'ANF', 'ARMK', 'ALV', 'BBWI', 'BBY', 'BWA', 'BC', 'BLDR',
+        'BURL', 'CPRI', 'KMX', 'CAVA', 'CZR', 'DECK', 'DKS', 'DPZ', 'DKNG', 'EXPE',
+        'FIVE', 'FND', 'FL', 'GRMN', 'GIII', 'GPC', 'HAS', 'HGV', 'H', 'JACK', 'KSS',
+        'LEA', 'LAD', 'LYV', 'LEN', 'M', 'VAC', 'MAT', 'MHK', 'NWL', 'JWN', 'ORLY',
+        'PAG', 'PLNT', 'POOL', 'PHM', 'RL', 'ROST', 'RCL', 'TPR', 'TSCO', 'TNL',
+        'ULTA', 'MTN', 'VFC', 'WHR', 'WSM', 'YUM', 'ALLE', 'BJ', 'NXT','TNL', 'TPH',
+        # Consumer Staples
+        'BF-B', 'CPB', 'CAG', 'CHD', 'CLX', 'DAR', 'EL', 'FLO', 'GIS', 'HRL', 'HSY',
+        'INGR', 'K', 'KDP', 'KMB', 'LW', 'MKC', 'MDLZ', 'MNST', 'PEP', 'SJM', 'STZ',
+        'SYY', 'TSN', 'WBA', 'POST', 'ACI', 'BRBR', 'CASY',  'USFD',
+        # Energy
+        'APA', 'BKR', 'COP', 'CVX', 'DVN', 'EOG', 'HAL', 'HES', 'KMI', 'MRO', 'MPC',
+        'OXY', 'PSX', 'PXD', 'SLB', 'TRGP', 'VLO', 'WMB', 'XOM', 'CLR', 'AM',  'AR',
+        'TPL', 'VNOM',
+        # Financials
+        'ACGL', 'AFG', 'AFL', 'ALL', 'ALLY', 'AMG', 'AON', 'AXON', 'AIG', 'AIZ',
+        'AMP', 'AWI', 'AXS', 'BAC', 'BEN', 'BK', 'BLK', 'BRO', 'BRK-B', 'C', 'CBOE',
+        'CB', 'CINF', 'CMA', 'CFG', 'COF', 'DFS', 'ERIE', 'FDS', 'FITB', 'FHN', 'GL',
+        'GS', 'HBAN', 'HIG', 'IVZ', 'JPM', 'KEY', 'L', 'LNC', 'MKTX', 'MMC', 'MET',
+        'MCO', 'MS', 'MSCI', 'NDAQ', 'NAVI', 'NTRS', 'ORI', 'PFG', 'PGR', 'PNC', 'PRU',
+        'RJF', 'RF', 'RE', 'SCHW', 'STT', 'SIVB', 'TFC', 'TRV', 'TROW', 'USB', 'WRB',
+        'WFC', 'WTW', 'ZION','ASB', 'BHF', 'CADE', 'ESNT', 'FULT', 'HLNE', 'IBKR',
+        'JXN', 'ONB', 'UMBF', 'WAL',
+        # Health Care
+        'ACHC', 'AMED', 'AVTR', 'BIO', 'BMRN', 'CRL', 'COO', 'XRAY', 'EHC', 'EXAS',
+        'EXEL', 'GMED', 'HOLX', 'IDXX', 'PODD', 'IART', 'IQV', 'JAZZ', 'LNTH', 'MASI',
         'MEDP', 'MTD', 'MOH', 'NBIX', 'PEN', 'DGX', 'RVTY', 'SRPT', 'TNDM', 'TFX',
-        'THC', 'UTHR', 'UHS', 'VEEV', 'WST', 'ZBH', 'ICUI', 'AVNT', 'CYTK', 'ILMN',
+        'THC', 'UTHR', 'UHS', 'VEEV', 'WST', 'ZBH', 'ICUI','AVNT', 'CYTK', 'ILMN',
+        # Industrials
         'AYI', 'ACM', 'AGCO', 'AL', 'ALK', 'AAL', 'APG', 'AIT', 'CAR', 'BWXT', 'BAH',
         'BYD', 'BRC', 'BCO', 'CSL', 'CLH', 'FIX', 'CPA', 'CW', 'EME', 'FLR', 'GATX',
         'GNRC', 'GGG', 'HEI', 'HWM', 'HUBB', 'HII', 'ITT', 'J', 'JBLU', 'KNX', 'LDOS',
         'LII', 'MTZ', 'NDSN', 'NVT', 'OSK', 'OC', 'PSN', 'RBA', 'RRX', 'RSG', 'R',
         'SAIA', 'SNA', 'LUV', 'SPR', 'TXT', 'TTC', 'TDG', 'TGI', 'UAL', 'URI', 'VMI',
         'WCN', 'WCC', 'XPO', 'ZBRA', 'JBT', 'AAON', 'ATI', 'CNH', 'WWD', 'ZWS',
+        # Information Technology
         'AKAM', 'ALGM', 'DOX', 'AMKR', 'APPF', 'ARW', 'ASGN', 'AVT', 'BDC', 'BILL',
         'BLKB', 'CDNS', 'CDW', 'COHR', 'CVLT', 'GLW', 'DDOG', 'DOCU', 'DBX', 'DT',
         'ENPH', 'EPAM', 'FFIV', 'FICO', 'FLEX', 'FTNT', 'G', 'GFS', 'GDDY', 'GWRE',
         'HPE', 'HPQ', 'IBM', 'INTC', 'JBL', 'JNPR', 'KEYS', 'KLAC', 'LRCX', 'MCHP',
         'MU', 'MSI', 'NTAP', 'NLOK', 'NVDA', 'PAYC', 'PTC', 'QCOM', 'QRVO', 'RMD',
         'STX', 'SNPS', 'SWKS', 'TEL', 'TER', 'TRMB', 'TYL', 'VRSN', 'WDC', 'ZTS',
+        # Materials
         'ALB', 'APD', 'AVY', 'BLL', 'CE', 'CF', 'DD', 'DOW', 'ECL', 'EMN', 'FMC',
         'IFF', 'IP', 'LIN', 'LYB', 'MLM', 'MOS', 'NEM', 'NUE', 'PKG', 'PPG', 'SHW',
-        'SEE', 'VMC', 'WRK', 'ALTR', 'FN', 'PSTG', 'AA', 'ASH', 'ATR', 'AXTA',
+        'SEE', 'VMC', 'WRK', 'CE', 'ALTR', 'FN','PSTG','AA', 'ASH', 'ATR', 'AXTA',
+        # Real Estate
         'ARE', 'AMT', 'AVB', 'BXP', 'CPT', 'CCI', 'DLR', 'DRE', 'EQIX', 'EQR', 'ESS',
         'EXR', 'FRT', 'HST', 'IRM', 'KIM', 'MAA', 'O', 'PEAK', 'PLD', 'PSA', 'REG',
-        'SBAC', 'SPG', 'UDR', 'VTR', 'VNO', 'WELL', 'WY', 'ADC', 'AMH', 'RHP', 'TRNO',
+        'SBAC', 'SPG', 'UDR', 'VTR', 'VNO', 'WELL', 'WY','ADC', 'AMH', 'RHP', 'TRNO',
+        # Utilities
         'AEE', 'AEP', 'AES', 'ATO', 'AWK', 'CNP', 'CMS', 'D', 'DTE', 'DUK', 'ED',
         'EIX', 'ES', 'ETR', 'EVRG', 'EXC', 'FE', 'LNT', 'NEE', 'NI', 'NRG', 'PEG',
         'PNW', 'PPL', 'SO', 'SRE', 'WEC', 'XEL', 'ALE', 'BKH'
@@ -117,54 +168,65 @@ def get_sp400_tickers():
 
 def get_sp600_tickers():
     tickers = [
+        # Financials
         'AEL', 'AGO', 'AMBC', 'AMSF', 'ARI', 'ASB', 'BANC', 'BANF', 'BANR', 'BFIN',
         'BHF', 'BOKF', 'CADE', 'CATY', 'CFFN', 'CHCO', 'CNBS', 'COOP', 'CVBF',
         'ESNT', 'EWBC', 'FBC', 'FBP', 'FBSI', 'FULT', 'GBCI', 'GSHD', 'HWC', 'HIFS',
         'HLNE', 'HMN', 'HOPE', 'INDB', 'ISBC', 'LBAI', 'MCY', 'NMIH', 'NBN', 'NPK',
         'OCFC', 'OFG', 'ONB', 'ORRF', 'OSBC', 'PFBC', 'PFSI', 'PROV', 'PJT', 'RNST',
         'SASR', 'SFBS', 'SFST', 'SLM', 'STC', 'SUI', 'TCBI', 'TBBK', 'TRUP', 'UMBF',
-        'UCBI', 'VIRT', 'VLY', 'WABC', 'WBS', 'WETF', 'WRLD', 'AAN', 'AAON', 'ABM', 
-        'ACA', 'AIN', 'AIR', 'ALG', 'ARCB', 'ATKR', 'AVAV', 'AZZ', 'B', 'BCC', 
-        'BMI', 'BWFG', 'CARS', 'CBIZ', 'CHX', 'CR', 'CRS', 'CSWI', 'CSX', 'CTOS', 
-        'CVGI', 'DCI', 'DXPE', 'DY', 'EPAC', 'ESE', 'FSS', 'GBX', 'GFF', 'GVA', 
-        'GTLS', 'HCSG', 'HNI', 'HURC', 'IBP', 'IDCC', 'ITGR', 'ITRI', 'KAI', 'KAR', 
-        'KFY', 'KMT', 'LMAT', 'LNN', 'MATW', 'MGRC', 'MOG.A', 'MSA', 'MWA', 'MYE', 
-        'NPO', 'NSC', 'PAC', 'PBI', 'PRA', 'RBC', 'ROLL', 'RUSHA', 'RYAM', 'SCPH', 
-        'SKY', 'SLVM', 'SPXC', 'STRL', 'SXI', 'TILE', 'TKR', 'TRN', 'UFPT', 'UNF', 
-        'VRRM', 'WERN', 'WLDN', 'ZWS', 'ACIW', 'ACLS', 'ADTN', 'AGYS', 'ALRM', 
-        'AOSL', 'ATEN', 'AVID', 'BOX', 'CALX', 'CCOI', 'CEVA', 'CLSK', 'CNXC', 
-        'CRVL', 'CSGS', 'DIOD', 'DOCN', 'EBC', 'ENVA', 'EVTC', 'EXTR', 'HLIT', 
-        'HSTM', 'IMKTA', 'IMPINJ', 'INSP', 'IRDM', 'ITI', 'LPSN', 'LRN', 'LUNA', 
-        'MARA', 'MSTR', 'NABL', 'NATI', 'NVEI', 'PAYO', 'PCTI', 'PI', 'PRFT', 
-        'PRGS', 'PSTG', 'QLIK', 'QNST', 'QTWO', 'RDWR', 'SPSC', 'SREV', 'STRT', 
-        'SMTC', 'TDC', 'TESS', 'TTEC', 'TWOU', 'UIS', 'UPLD', 'ABCB', 'ADUS', 
-        'AGTI', 'AHCO', 'AMEH', 'AMN', 'AMPH', 'ANGO', 'ANIK', 'ANIP', 'AORT', 
-        'AROW', 'AVNS', 'BCPC', 'BLFS', 'CASH', 'CCRN', 'CERE', 'CHNG', 'COLL', 
-        'COR', 'CORT', 'CPRX', 'CPSI', 'CUTR', 'DGII', 'EHC', 'GKOS', 'HAE', 
-        'HAIN', 'HRMY', 'HSKA', 'ICUI', 'IDN', 'INVA', 'IRTC', 'LGH', 'MMSI', 
-        'NEO', 'NHC', 'OPCH', 'PAHC', 'PDCO', 'PGNY', 'PHM', 'PRVA', 'PTGX', 
-        'RDNT', 'SEM', 'SGRY', 'TGTX', 'TMDX', 'TRHC', 'VCEL', 'VIVO', 'ABG', 
-        'AEO', 'ALGT', 'AMWD', 'ASO', 'ATGE', 'BOOT', 'BSET', 'CENT', 'CHEF', 
+        'UCBI', 'VIRT', 'VLY', 'WABC', 'WBS', 'WETF', 'WRLD',
+        # Industrials
+        'AAN', 'AAON', 'ABM', 'ACA', 'AIN', 'AIR', 'ALG', 'ARCB', 'ATKR', 'AVAV',
+        'AZZ', 'B', 'BCC', 'BMI', 'BWFG', 'CARS', 'CBIZ', 'CHX', 'CR', 'CRS', 'CSWI',
+        'CSX', 'CTOS', 'CVGI', 'DCI', 'DXPE', 'DY', 'EPAC', 'ESE', 'FSS', 'GBX',
+        'GFF', 'GVA', 'GTLS', 'HCSG', 'HNI', 'HURC', 'IBP', 'IDCC', 'ITGR', 'ITRI',
+        'KAI', 'KAR', 'KFY', 'KMT', 'LMAT', 'LNN', 'MATW', 'MGRC', 'MOG.A', 'MSA',
+        'MWA', 'MYE', 'NPO', 'NSC', 'PAC', 'PBI', 'PRA', 'RBC', 'ROLL', 'RUSHA',
+        'RYAM', 'SCPH', 'SKY', 'SLVM', 'SPXC', 'STRL', 'SXI', 'TILE', 'TKR', 'TRN',
+        'UFPT', 'UNF', 'VRRM', 'WERN', 'WLDN', 'ZWS',
+        # Information Technology
+        'ACIW', 'ACLS', 'ADTN', 'AGYS', 'ALRM', 'AOSL', 'ATEN', 'AVID', 'BOX', 'CALX',
+        'CCOI', 'CEVA', 'CLSK', 'CNXC', 'CRVL', 'CSGS', 'DIOD', 'DOCN', 'EBC', 'ENVA',
+        'EVTC', 'EXTR', 'HLIT', 'HSTM', 'IMKTA', 'IMPINJ', 'INSP', 'IRDM', 'ITI',
+        'LPSN', 'LRN', 'LUNA', 'MARA', 'MSTR', 'NABL', 'NATI', 'NVEI', 'PAYO', 'PCTI',
+        'PI', 'PRFT', 'PRGS', 'PSTG', 'QLIK', 'QNST', 'QTWO', 'RDWR', 'SPSC', 'SREV',
+        'STRT', 'SMTC', 'TDC', 'TESS', 'TTEC', 'TWOU', 'UIS', 'UPLD',
+        # Health Care
+        'ABCB', 'ADUS', 'AGTI', 'AHCO', 'AMEH', 'AMN', 'AMPH', 'ANGO', 'ANIK', 'ANIP',
+        'AORT', 'AROW', 'AVNS', 'BCPC', 'BLFS', 'CASH', 'CCRN', 'CERE', 'CHNG',
+        'COLL', 'COR', 'CORT', 'CPRX', 'CPSI', 'CUTR', 'DGII', 'EHC', 'GKOS', 'HAE',
+        'HAIN', 'HRMY', 'HSKA', 'ICUI', 'IDN', 'INVA', 'IRTC', 'ITGR', 'LGH', 'LMAT',
+        'MMSI', 'NEO', 'NHC', 'OPCH', 'PAHC', 'PDCO', 'PGNY', 'PHM', 'PRVA', 'PTGX',
+        'RDNT', 'SEM', 'SGRY', 'TGTX', 'TMDX', 'TRHC', 'VCEL', 'VIVO',
+        # Consumer Discretionary
+        'ABG', 'AEO', 'ALGT', 'AMWD', 'ASO', 'ATGE', 'BOOT', 'BSET', 'CENT', 'CHEF',
         'CHGG', 'CNK', 'CONN', 'CSV', 'CVCO', 'DORM', 'DRH', 'EAT', 'ETH', 'FIGS',
         'FLXS', 'FOSL', 'FTDR', 'FUN', 'GCO', 'GOLF', 'GPI', 'GRBK', 'HBI', 'HCI',
-        'HIBB', 'HVT', 'IPAR', 'IRG', 'KBAL', 'KTB', 'LC', 'LESL', 'LFMN', 'LINC', 
-        'LSEA', 'MCRI', 'MESA', 'MGPI', 'MOV', 'MSGS', 'MYRG', 'OLLI', 'PLCE', 
+        'HIBB', 'HVT', 'IPAR', 'IRG', 'KBAL', 'KFY', 'KTB', 'LC', 'LESL', 'LFMN',
+        'LINC', 'LSEA', 'MCRI', 'MESA', 'MGPI', 'MOV', 'MSGS', 'MYRG', 'OLLI', 'PLCE',
         'PLAY', 'PRG', 'PZZA', 'RCII', 'RENT', 'SAH', 'SCVL', 'SHAK', 'SHOO', 'SIG',
-        'SONO', 'SP', 'TPH', 'TR', 'VVI', 'WGO', 'WSM', 'WWW', 'XPEL', 'YOU',
-        'AAT', 'ADC', 'AHH', 'AKR', 'ALEX', 'APLE', 'BRT', 'CIO', 'CSR', 'CUBE', 
-        'CUZ', 'DEA', 'DHC', 'EPRT', 'FCPT', 'FSP', 'GEO', 'GNL', 'GTY', 'HTA', 
-        'IIPR', 'INDT', 'LSI', 'LTC', 'MPW', 'NHI', 'NXRT', 'OFC', 'OPI', 'OUT', 
-        'PCH', 'PEB', 'RHP', 'RLJ', 'SHO', 'SIR', 'SLG', 'SRC', 'STAG', 'STOR', 
-        'TRNO', 'UNIT', 'VER', 'WRE', 'XHR', 'APOG', 'ASIX', 'ATI', 'AVD', 'CENX', 
-        'CSTM', 'DRD', 'GMS', 'HWKN', 'KALU', 'KOP', 'KRUS', 'MLP', 'MTX', 'OLN', 
-        'PLPC', 'PLXS', 'SCHN', 'SMG', 'SUM', 'SYNL', 'TMST', 'TRS', 'UFPI', 
-        'USLM', 'WOR', 'AROC', 'ARCH', 'BCEI', 'BRY', 'BSM', 'CDEV', 'CIVI', 
-        'CNX', 'CRC', 'CRK', 'ESTE', 'GLOP', 'HCC', 'LPI', 'MNRL', 'MTDR', 'NOG', 
-        'OAS', 'OII', 'OIS', 'PDCE', 'POWL', 'PXD', 'ROCC', 'SLCA', 'SM', 'TDW', 
-        'TUSK', 'VTLE', 'WHD', 'ALE', 'AVA', 'AWR', 'BKH', 'MGEE', 'NJR', 'NWN', 
-        'OTTR', 'SJI', 'SR', 'SWX', 'UGI', 'UPL', 'WTRG', 'YORW', 'ATNI', 'CNSL', 
-        'GOGO', 'GTN', 'IMAX', 'LILA', 'LILAK', 'MSG', 'PRTH', 'SABR', 'SBGI', 
-        'SATS', 'TIGO', 'USM'
+        'SKY', 'SONO', 'SP', 'TILE', 'TPH', 'TR', 'VVI', 'WGO', 'WSM', 'WWW', 'XPEL', 'YOU',
+        # Real Estate
+        'AAT', 'ADC', 'AHH', 'AKR', 'ALEX', 'APLE', 'BRT', 'CIO', 'CSR', 'CUBE', 'CUZ',
+        'DEA', 'DHC', 'EPRT', 'FCPT', 'FSP', 'GEO', 'GNL', 'GTY', 'HTA', 'IIPR', 'INDT',
+        'LSI', 'LTC', 'MPW', 'NHI', 'NXRT', 'OFC', 'OPI', 'OUT', 'PCH', 'PEB', 'PFBC',
+        'RHP', 'RLJ', 'SHO', 'SIR', 'SLG', 'SRC', 'STAG', 'STOR', 'TRNO', 'UNIT',
+        'VER', 'WRE', 'XHR',
+        # Materials
+        'ACA', 'APOG', 'ASIX', 'ATI', 'AVD', 'BCC', 'CENX', 'CSTM', 'DRD', 'ESE', 'GFF',
+        'GMS', 'HWKN', 'IBP', 'KALU', 'KOP', 'KRUS', 'MLP', 'MTX', 'OLN', 'PLPC', 'PLXS',
+        'RYAM', 'SCHN', 'SLVM', 'SMG', 'SUM', 'SYNL', 'TMST', 'TRS', 'UFPI', 'USLM', 'WOR',
+        # Energy
+        'AROC', 'ARCH', 'BCEI', 'BRY', 'BSM', 'CDEV', 'CIVI', 'CNX', 'CRC', 'CRK',
+        'ESTE', 'GLOP', 'HCC', 'LPI', 'MNRL', 'MTDR', 'NOG', 'OAS', 'OII', 'OIS',
+        'PDCE', 'POWL', 'PXD', 'ROCC', 'SLCA', 'SM', 'TDW', 'TUSK', 'VTLE', 'WHD',
+        # Utilities
+        'ALE', 'AVA', 'AWR', 'BKH', 'MGEE', 'NJR', 'NWN', 'OTTR', 'SJI', 'SR', 'SWX',
+        'UGI', 'UPL', 'WTRG', 'YORW',
+        # Communication Services
+        'ADTN', 'ATNI', 'CCOI', 'CNSL', 'GOGO', 'GTN', 'IMAX', 'LILA', 'LILAK', 'MSG',
+        'PRTH', 'SABR', 'SBGI', 'SATS', 'TIGO', 'USM'
     ]
     return [str(t).replace('.', '-') for t in list(set(tickers))]
 
@@ -234,29 +296,37 @@ def get_yahoo_data(ticker, index_name):
             return {'Ticker': ticker, 'Error': 'No valid pricing data found.'}
 
         close = info.get('regularMarketPreviousClose', info.get('previousClose', info.get('currentPrice')))
-        
-        # --- NEW LOGIC: Fetch Top 5 Recent News Articles ---
+
+        # --- NEW LOGIC: Highly robust news extraction to survive API changes ---
+        news_block = "No recent news available."
         try:
-            raw_news = stock.news
-            news_items = []
-            if raw_news:
-                for article in raw_news[:5]:
-                    title = article.get('title', 'No Title')
-                    publisher = article.get('publisher', 'Unknown Publisher')
-                    pub_time = article.get('providerPublishTime')
+            news_items = stock.news
+            if news_items:
+                formatted_news = []
+                for item in news_items[:5]:
+                    # Dynamically check for multiple possible yfinance API keys
+                    title = item.get('title', item.get('content', 'No Title'))
+                    publisher = item.get('publisher', item.get('provider', 'Unknown Publisher'))
                     
+                    # Handle timestamp conversion safely
+                    pub_time = item.get('providerPublishTime', item.get('publishTime'))
                     if pub_time:
-                        date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d')
+                        try:
+                            # Convert Unix timestamp to YYYY-MM-DD
+                            date_str = datetime.fromtimestamp(int(pub_time)).strftime('%Y-%m-%d')
+                        except (ValueError, TypeError):
+                            date_str = "Unknown Date"
                     else:
                         date_str = "Unknown Date"
                         
-                    news_items.append(f"[{date_str}] {title} ({publisher})")
+                    formatted_news.append(f"[{date_str}] {title} ({publisher})")
                 
-                news_block = " | ".join(news_items)
-            else:
-                news_block = "No recent news available."
+                if formatted_news:
+                    news_block = " | ".join(formatted_news)
         except Exception as e:
-            news_block = f"Error fetching news: {str(e)}"
+            # Fails gracefully without crashing the price fetch
+            print(f"Notice: Could not parse news for {ticker}: {e}")
+            pass
         # ---------------------------------------------------
 
         dict_rating = {
@@ -323,7 +393,7 @@ def get_yahoo_data(ticker, index_name):
             'shortPercentOfFloat': info.get('shortPercentOfFloat'),
             'floatShares': info.get('floatShares'),
             
-            # The newly extracted news string
+            # Attaching the extracted news block
             'recent_news': news_block
         }
         

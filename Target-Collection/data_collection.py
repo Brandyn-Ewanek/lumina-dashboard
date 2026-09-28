@@ -5,9 +5,80 @@ import json
 import time
 import os
 import requests
+import re
 from datetime import datetime
 from io import StringIO
 
+# ==========================================
+# 1. AWS BEDROCK CONFIGURATION
+# ==========================================
+KB_ID = "UCDIEAZIRS"
+
+# We split the clients: KB is in your local CA region, Nova models run best in US East 1
+try:
+    bedrock_agent = boto3.client('bedrock-agent-runtime', region_name='ca-central-1')
+    bedrock_runtime = boto3.client('bedrock-runtime', region_name='us-east-1')
+except Exception as e:
+    print(f"Warning: Could not initialize Bedrock clients. Error: {e}")
+
+def analyze_news_severity(ticker, news_block):
+    """Queries Pinecone via Bedrock and uses Nova Lite to grade news severity."""
+    if not news_block or "No recent news available" in news_block:
+        return 0.5, "None"
+        
+    case_studies = "No historical context available."
+    
+    # 1. Retrieve Historical Precedents from Pinecone
+    try:
+        retrieval_resp = bedrock_agent.retrieve(
+            knowledgeBaseId=KB_ID,
+            retrievalQuery={'text': f"Impact of: {news_block}"},
+            retrievalConfiguration={'vectorSearchConfiguration': {'numberOfResults': 3}}
+        )
+        results = retrieval_resp.get('retrievalResults', [])
+        if results:
+            case_studies = "\n\n".join([r['content']['text'] for r in results])
+    except Exception as e:
+        print(f"[{ticker}] KB Retrieval skipped/failed: {e}")
+
+    # 2. Score Severity via Amazon Nova Lite
+    system_prompt = """You are an elite quantitative equity analyst. 
+Analyze the recent news headlines for the stock and grade the catalyst's severity from 0.0 to 1.0.
+0.0 = Harmless / Temporary Macro Noise / Positive News
+0.5 = Moderate Headwind
+1.0 = Structural Failure / Catastrophic Risk / Fraud
+
+Use the provided historical precedents to inform your score if relevant.
+Return ONLY a valid JSON object with exactly two keys: "catalyst_type" (a short 3-word string) and "severity_score" (a float). Do not include markdown formatting."""
+    
+    prompt = f"Stock: {ticker}\nLive News: {news_block}\n\nHistorical Case Studies:\n{case_studies}"
+    
+    try:
+        response = bedrock_runtime.converse(
+            modelId='amazon.nova-lite-v1:0',
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            system=[{"text": system_prompt}],
+            inferenceConfig={"temperature": 0.1, "maxTokens": 200}
+        )
+        
+        output_text = response['output']['message']['content'][0]['text']
+        
+        # Clean up JSON if Nova wrapped it in markdown
+        match = re.search(r'\{.*\}', output_text, re.DOTALL)
+        if match:
+            result = json.loads(match.group(0))
+        else:
+            result = json.loads(output_text)
+            
+        return float(result.get('severity_score', 0.5)), str(result.get('catalyst_type', 'Unknown'))
+        
+    except Exception as e:
+        print(f"[{ticker}] Nova inference failed: {e}")
+        return 0.5, "Unscored"
+
+# ==========================================
+# 2. TICKER LISTS
+# ==========================================
 def get_sp500_tickers():
     tickers = [
         # Software
@@ -287,6 +358,31 @@ def get_cached_tickers(bucket_name, index_id, fresh_tickers):
         except Exception:
             return []
 
+# ==========================================
+# 3. MEMORY BANK & DATA FETCHING
+# ==========================================
+def get_historical_state(bucket_name, index_id, s3_client):
+    """Loads yesterday's S3 file so we can inherit scores if the news hasn't changed."""
+    state = {}
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=f"data/today/{index_id}_latest.csv")
+        df = pd.read_csv(StringIO(response['Body'].read().decode('utf-8', errors='replace')), low_memory=False)
+        
+        date_col = 'date' if 'date' in df.columns else 'Date'
+        latest_df = df.sort_values(date_col).groupby('Ticker').last().reset_index()
+        
+        for _, row in latest_df.iterrows():
+            state[row['Ticker']] = {
+                'recent_news': row.get('recent_news', ''),
+                'news_severity': row.get('news_severity', 0.5),
+                'catalyst_type': row.get('catalyst_type', 'Inherited'),
+                'temporary_scare_score': row.get('temporary_scare_score', 0.0)
+            }
+        print(f"Loaded memory state for {len(state)} tickers from {index_id}.")
+    except Exception as e:
+        print(f"Could not load memory state for {index_id} (Starting fresh): {e}")
+    return state
+
 def get_yahoo_data(ticker, index_name):
     try:
         stock = yf.Ticker(ticker)
@@ -297,22 +393,19 @@ def get_yahoo_data(ticker, index_name):
 
         close = info.get('regularMarketPreviousClose', info.get('previousClose', info.get('currentPrice')))
 
-        # --- NEW LOGIC: Highly robust news extraction to survive API changes ---
+        # Dynamic Extraction for Live Headlines
         news_block = "No recent news available."
         try:
             news_items = stock.news
             if news_items:
                 formatted_news = []
                 for item in news_items[:5]:
-                    # Dynamically check for multiple possible yfinance API keys
                     title = item.get('title', item.get('content', 'No Title'))
                     publisher = item.get('publisher', item.get('provider', 'Unknown Publisher'))
-                    
-                    # Handle timestamp conversion safely
                     pub_time = item.get('providerPublishTime', item.get('publishTime'))
+                    
                     if pub_time:
                         try:
-                            # Convert Unix timestamp to YYYY-MM-DD
                             date_str = datetime.fromtimestamp(int(pub_time)).strftime('%Y-%m-%d')
                         except (ValueError, TypeError):
                             date_str = "Unknown Date"
@@ -324,10 +417,8 @@ def get_yahoo_data(ticker, index_name):
                 if formatted_news:
                     news_block = " | ".join(formatted_news)
         except Exception as e:
-            # Fails gracefully without crashing the price fetch
             print(f"Notice: Could not parse news for {ticker}: {e}")
             pass
-        # ---------------------------------------------------
 
         dict_rating = {
             'Ticker': ticker,
@@ -408,12 +499,14 @@ def get_yahoo_data(ticker, index_name):
     except Exception as e:
         return {'Ticker': ticker, 'Error': str(e)}
 
+# ==========================================
+# 4. S3 FILE MANAGEMENT
+# ==========================================
 def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s3_client):
     s3_key = f"data/today/{index_id}_latest.csv"
     
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-        
         existing_csv = response['Body'].read().decode('utf-8', errors='replace')
         existing_df = pd.read_csv(StringIO(existing_csv), low_memory=False)
         
@@ -424,11 +517,17 @@ def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s
             
         combined_df = pd.concat([existing_df, today_df], ignore_index=True)
         combined_df = combined_df.drop_duplicates(subset=['date', 'Ticker'], keep='last')
-        print(f"Appended today's data to master file for {index_display_name}. Total rows: {len(combined_df)}")
+        
+        csv_buffer = StringIO()
+        combined_df.to_csv(csv_buffer, index=False)
+        s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_buffer.getvalue())
+        print(f"✅ Appended today's data to master file for {index_display_name}. Total rows: {len(combined_df)}")
         
     except s3_client.exceptions.NoSuchKey:
-        print(f"No existing master file found. Creating a new one for {index_display_name}.")
-        combined_df = today_df
+        print(f"⚠️ No existing master file found for {index_display_name}. Creating new.")
+        csv_buffer = StringIO()
+        today_df.to_csv(csv_buffer, index=False)
+        s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_buffer.getvalue())
         
     except Exception as e:
         print(f"CRITICAL ERROR reading master file for {index_display_name}: {e}")
@@ -437,12 +536,10 @@ def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s
         csv_buffer = StringIO()
         today_df.to_csv(csv_buffer, index=False)
         s3_client.put_object(Bucket=bucket_name, Key=backup_key, Body=csv_buffer.getvalue())
-        return
 
-    csv_buffer = StringIO()
-    combined_df.to_csv(csv_buffer, index=False)
-    s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_buffer.getvalue())
-
+# ==========================================
+# 5. MAIN EXECUTION PIPELINE
+# ==========================================
 def main():
     today_obj = datetime.today()
     today_str = today_obj.strftime('%Y-%m-%d')
@@ -452,7 +549,7 @@ def main():
         raise ValueError("S3_BUCKET_NAME environment variable is not set!")
         
     s3_client = boto3.client('s3')
-    print("Fetching and verifying ticker lists...")
+    print("Waking up Lumina Data Pipeline with Amazon Nova AI Gatekeeper...")
     
     datasets = {
         'sp500': {'display': 'SP500', 'tickers': get_cached_tickers(bucket_name, 'sp500', get_sp500_tickers())},
@@ -468,31 +565,68 @@ def main():
         if not tickers:
             continue
             
-        print(f"\n--- Starting data collection for {index_display_name} ({len(tickers)} tickers) ---")
+        print(f"\n--- Starting AI pipeline for {index_display_name} ({len(tickers)} tickers) ---")
+        
+        # 1. Load the Memory Bank
+        historical_state = get_historical_state(bucket_name, index_id, s3_client)
         successful_data = []
 
         for i, ticker in enumerate(tickers):
             if i % 50 == 0 and i > 0:
                 print(f"Processed {i}/{len(tickers)} tickers for {index_display_name}...")
                 
+            # Fetch Live Data
             data = get_yahoo_data(ticker, index_display_name)
             
             if 'Error' not in data:
+                past_state = historical_state.get(ticker, {})
+                past_news = past_state.get('recent_news', '')
+                live_news = data.get('recent_news', '')
+                
+                # AI Gatekeeper Check
+                if not live_news or live_news == past_news or "No recent news available" in live_news:
+                    # Inherit previous scores to save AWS runtime/money
+                    severity = past_state.get('news_severity', 0.5)
+                    catalyst = past_state.get('catalyst_type', 'Inherited/None')
+                else:
+                    # Trigger Bedrock & Nova Lite for a brand new catalyst
+                    print(f"🚨 Breaking News detected for {ticker}. Routing to Amazon Nova...")
+                    severity, catalyst = analyze_news_severity(ticker, live_news)
+                
+                # Math: Calculate the Vector 1 "Temporary Scare" Score (Max 35 points)
+                upside_pct = data.get('close_from_mean_target')
+                if upside_pct is None or upside_pct <= 0:
+                    temp_scare_score = 0
+                else:
+                    # Cap upside at 50% for scoring matrix
+                    upside_capped = min(upside_pct, 50.0) 
+                    # 35 points possible. (Upside / 50%) * 35 * (1.0 - severity)
+                    base_score = (upside_capped / 50.0) * 35.0
+                    temp_scare_score = base_score * (1.0 - severity)
+                
+                # Append finalized scores
+                data['news_severity'] = severity
+                data['catalyst_type'] = catalyst
+                data['temporary_scare_score'] = round(temp_scare_score, 2)
+                
                 successful_data.append(data)
                 
-            time.sleep(1)
+            time.sleep(1) # Yahoo Rate Limit Buffer
 
+        # Upload and Append
         if successful_data:
             today_df = pd.DataFrame(successful_data)
             today_df.insert(0, 'date', today_str) 
-            
             save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s3_client)
             
             # Archive backup
             archive_key = f"data/historical-archive/{index_id}/{today_obj.strftime('%Y')}/{today_obj.strftime('%m')}/{today_str}_{index_display_name.upper()} Data.csv"
-            csv_buffer = StringIO()
-            today_df.to_csv(csv_buffer, index=False)
-            s3_client.put_object(Bucket=bucket_name, Key=archive_key, Body=csv_buffer.getvalue())
+            try:
+                csv_buffer = StringIO()
+                today_df.to_csv(csv_buffer, index=False)
+                s3_client.put_object(Bucket=bucket_name, Key=archive_key, Body=csv_buffer.getvalue())
+            except Exception as e:
+                print(f"Note: Could not upload archive backup for {index_id}: {e}")
 
 if __name__ == "__main__":
     main()

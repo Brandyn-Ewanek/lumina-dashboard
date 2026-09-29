@@ -171,7 +171,6 @@ def get_sp500_tickers():
         'EXR', 'FRT', 'HST', 'IRM', 'KIM', 'MAA', 'O', 'PEAK', 'PLD', 'PSA',
         'REG', 'SBAC', 'SPG', 'UDR', 'VNO', 'WELL','AMT', 'PSA', 'WY', 'VTR'
     ]
-    # Replace dots with dashes for US stocks (e.g. BRK.B -> BRK-B)
     return [str(t).replace('.', '-') for t in list(set(tickers))]
 
 def get_sp400_tickers():
@@ -393,7 +392,9 @@ def get_yahoo_data(ticker, index_name):
 
         close = info.get('regularMarketPreviousClose', info.get('previousClose', info.get('currentPrice')))
 
-        # Dynamic Extraction for Live Headlines
+        # ==============================================================
+        # NEW YAHOO FINANCE API PARSER (Fixed for nested JSON & ISO Dates)
+        # ==============================================================
         news_block = "No recent news available."
         try:
             news_items = stock.news
@@ -401,16 +402,26 @@ def get_yahoo_data(ticker, index_name):
                 formatted_news = []
                 for item in news_items[:5]:
                     title = item.get('title', item.get('content', 'No Title'))
-                    publisher = item.get('publisher', item.get('provider', 'Unknown Publisher'))
-                    pub_time = item.get('providerPublishTime', item.get('publishTime'))
+                    
+                    provider = item.get('provider', {})
+                    if isinstance(provider, dict):
+                        publisher = provider.get('displayName', 'Unknown Publisher')
+                    else:
+                        publisher = item.get('publisher', 'Unknown Publisher')
+                    
+                    pub_time = item.get('pubDate', item.get('providerPublishTime', item.get('publishTime')))
+                    date_str = "Unknown Date"
                     
                     if pub_time:
-                        try:
-                            date_str = datetime.fromtimestamp(int(pub_time)).strftime('%Y-%m-%d')
-                        except (ValueError, TypeError):
-                            date_str = "Unknown Date"
-                    else:
-                        date_str = "Unknown Date"
+                        if isinstance(pub_time, str):
+                            # It's an ISO string like '2026-09-24T09:14:38Z'
+                            date_str = pub_time.split('T')[0]
+                        else:
+                            # It's a UNIX timestamp integer
+                            try:
+                                date_str = datetime.fromtimestamp(int(pub_time)).strftime('%Y-%m-%d')
+                            except (ValueError, TypeError):
+                                date_str = "Unknown Date"
                         
                     formatted_news.append(f"[{date_str}] {title} ({publisher})")
                 
@@ -596,13 +607,13 @@ def main():
                 # Math: Calculate the Vector 1 "Temporary Scare" Score (Max 35 points)
                 upside_pct = data.get('close_from_mean_target')
                 if upside_pct is None or upside_pct <= 0:
-                    temp_scare_score = 0
+                    temp_scare_score = 0.0
                 else:
-                    # Cap upside at 50% for scoring matrix
-                    upside_capped = min(upside_pct, 50.0) 
-                    # 35 points possible. (Upside / 50%) * 35 * (1.0 - severity)
-                    base_score = (upside_capped / 50.0) * 35.0
-                    temp_scare_score = base_score * (1.0 - severity)
+                    # Convert percentage to decimal and normalize to an 80% maximum upside scale
+                    upside_dec = upside_pct / 100.0
+                    u_norm = min(upside_dec / 0.80, 1.0)
+                    # Non-linear divergence formula: Punishes high-severity value traps
+                    temp_scare_score = 35.0 * (u_norm**0.4) * (1.0 - severity**1.7)
                 
                 # Append finalized scores
                 data['news_severity'] = severity

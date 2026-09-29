@@ -375,7 +375,8 @@ def get_historical_state(bucket_name, index_id, s3_client):
                 'recent_news': row.get('recent_news', ''),
                 'news_severity': row.get('news_severity', 0.5),
                 'catalyst_type': row.get('catalyst_type', 'Inherited'),
-                'temporary_scare_score': row.get('temporary_scare_score', 0.0)
+                'temporary_scare_score': row.get('temporary_scare_score', 0.0),
+                'margin_of_safety_score': row.get('margin_of_safety_score', 0.0)
             }
         print(f"Loaded memory state for {len(state)} tickers from {index_id}.")
     except Exception as e:
@@ -604,8 +605,11 @@ def main():
                     print(f"🚨 Breaking News detected for {ticker}. Routing to Amazon Nova...")
                     severity, catalyst = analyze_news_severity(ticker, live_news)
                 
-                # Math: Calculate the Vector 1 "Temporary Scare" Score (Max 35 points)
                 upside_pct = data.get('close_from_mean_target')
+                
+                # ==============================================================
+                # VECTOR 1: "Temporary Scare" Score (Max 35 points)
+                # ==============================================================
                 if upside_pct is None or upside_pct <= 0:
                     temp_scare_score = 0.0
                 else:
@@ -615,10 +619,21 @@ def main():
                     # Non-linear divergence formula: Punishes high-severity value traps
                     temp_scare_score = 35.0 * (u_norm**0.4) * (1.0 - severity**1.7)
                 
+                # ==============================================================
+                # VECTOR 2: "Margin of Safety" Score (Max 25 points)
+                # ==============================================================
+                if upside_pct is None or upside_pct <= 0:
+                    margin_score = 0.0
+                else:
+                    upside_dec = upside_pct / 100.0
+                    capped_upside = min(upside_dec, 0.50)
+                    margin_score = (capped_upside / 0.50) * 25.0
+                
                 # Append finalized scores
                 data['news_severity'] = severity
                 data['catalyst_type'] = catalyst
                 data['temporary_scare_score'] = round(temp_scare_score, 2)
+                data['margin_of_safety_score'] = round(margin_score, 2)
                 
                 successful_data.append(data)
                 

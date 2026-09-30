@@ -3,37 +3,61 @@ import os
 import boto3
 import pandas as pd
 import time
+import math
 from io import StringIO
 from datetime import datetime, timedelta
 from edgar import set_identity, Company
 
+# ==========================================
+# VECTOR 3: INSIDER CLUSTERING MATH
+# ==========================================
 def calculate_conviction_score(transactions):
-    score = 0
-    buy_count = 0
-    total_buy_value = 0
+    if not transactions:
+        return 0.0
+        
+    total_decayed_value = 0.0
+    unique_buyers = set()
+    current_time = datetime.now()
     
     for t in transactions:
-        # We want ALL buys so we can see the historical trend over time.
-        if t['type'] == 'BUY':
-            buy_count += 1
-            total_buy_value += t['total_value']
+        # We only care about open-market BUYS for conviction scoring
+        if t['type'] == 'BUY' and not t.get('is_10b5_1', False):
+            try:
+                filing_date = datetime.strptime(t['date'][:10], "%Y-%m-%d")
+                days_since_filing = max(0, (current_time - filing_date).days)
                 
-    if buy_count == 0:
-        return 0
+                # 1. Exponential Time Decay: e^(-0.015 * Days Since Filing)
+                decay_factor = math.exp(-0.015 * days_since_filing)
+                decayed_value = t['total_value'] * decay_factor
+                
+                total_decayed_value += decayed_value
+                unique_buyers.add(t['insider_name'])
+            except Exception as e:
+                pass
+                
+    # Filter out absolute noise: If combined present-value is < $10,000, score is 0.
+    if total_decayed_value <= 10000:
+        return 0.0
         
-    score += min(50, buy_count * 5)
-        
-    if total_buy_value > 1000000:
-        score += 50
-    elif total_buy_value > 250000:
-        score += 25
-    elif total_buy_value > 50000:
-        score += 10
-        
-    return min(100, score)
+    # 2. Volume Base: Base-10 Logarithmic Scale
+    # We subtract 4 to set our baseline at $10k (log10(10000) = 4).
+    # Multiplying by 6.5 allows a $10M buy to hit ~19.5 base points before clustering.
+    base_score = (math.log10(total_decayed_value) - 4.0) * 6.5
+    
+    # 3. Cluster Multiplier: 1 + (0.2 * (Unique Buyers - 1))
+    cluster_multiplier = 1.0 + (0.2 * (len(unique_buyers) - 1))
+    
+    final_score = base_score * cluster_multiplier
+    
+    # 4. Cap at exactly 25.0 points
+    return round(min(max(final_score, 0.0), 25.0), 1)
 
+# ==========================================
+# SEC EDGAR EXTRACTION
+# ==========================================
 def get_insider_trades(ticker, start_date):
     try:
+        # Replace with your actual SEC-registered email
         set_identity("Lumina Strategies Quantitative Engine (your.email@example.com)")
         company = Company(ticker)
         if not company:
@@ -47,15 +71,12 @@ def get_insider_trades(ticker, start_date):
             try:
                 form4 = filing.obj()
                 
-                # BULLETPROOFING: Safely handle different versions of the edgartools library
                 if hasattr(form4, 'get_ownership_summary'):
-                    # Newest edgartools version
                     summary = form4.get_ownership_summary()
                     insider_name = getattr(summary, 'insider_name', 'Unknown')
                     title = getattr(summary, 'position', 'Director/Officer')
                     trades = getattr(summary, 'transactions', [])
                 else:
-                    # Older edgartools version
                     insider_name = getattr(form4, 'reporting_owner_name', 'Unknown')
                     title = getattr(form4, 'reporting_owner_relationship', 'Director/Officer')
                     trades = getattr(form4, 'transactions', getattr(form4, 'non_derivatives', []))
@@ -63,14 +84,12 @@ def get_insider_trades(ticker, start_date):
                         trades = trades.trades
                 
                 for trade in trades:
-                    # Safely extract the code ('P' for Purchase, 'S' for Sale)
                     code = getattr(trade, 'code', getattr(trade, 'transaction_code', ''))
                     if code not in ['P', 'S']:
                         continue
                         
                     trade_type = "BUY" if code == 'P' else "SELL"
                     
-                    # Safely extract shares and prices
                     shares = getattr(trade, 'shares_numeric', getattr(trade, 'shares', 0))
                     price = getattr(trade, 'price_numeric', getattr(trade, 'price_per_share', getattr(trade, 'price', 0)))
                     
@@ -78,7 +97,6 @@ def get_insider_trades(ticker, start_date):
                     price = float(price) if price else 0
                     total_value = shares * price
                     
-                    # Safely check footnotes for 10b5-1 automated plans
                     footnotes = getattr(trade, 'footnotes', '')
                     is_automated = "10b5-1" in str(footnotes).lower()
                     
@@ -103,6 +121,9 @@ def get_insider_trades(ticker, start_date):
         print(f"SEC Blocked/Error on {ticker}: {str(e)}", flush=True)
         return []
 
+# ==========================================
+# PIPELINE UTILITIES
+# ==========================================
 def get_oldest_stock_date(s3_client, bucket_name):
     try:
         response = s3_client.get_object(Bucket=bucket_name, Key='data/today/sp500_latest.csv')
@@ -112,7 +133,8 @@ def get_oldest_stock_date(s3_client, bucket_name):
             return df['Date'].min()
     except Exception as e:
         print(f"Could not find oldest date, using fallback: {e}", flush=True)
-    return (datetime.now() - timedelta(days=1095)).strftime("%Y-%m-%d")
+    # Defaulting to exactly 2 years of history for decay calculation
+    return (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
 
 def get_all_tracked_tickers(s3_client, bucket_name):
     tickers = set()
@@ -137,12 +159,12 @@ def get_all_tracked_tickers(s3_client, bucket_name):
     return master_list
 
 def main():
-    print("Waking up Full-Market SEC Insider Data Collector v6...", flush=True)
+    print("Waking up Vector 3: SEC Insider Data Collector...", flush=True)
     bucket_name = os.environ.get('S3_BUCKET_NAME')
     s3_client = boto3.client('s3')
     
-    start_date = get_oldest_stock_date(s3_client, bucket_name) if bucket_name else "2023-01-01"
-    print(f"Aligning insider trades back to earliest price record: {start_date}", flush=True)
+    start_date = get_oldest_stock_date(s3_client, bucket_name) if bucket_name else "2024-01-01"
+    print(f"Extracting historical Form 4s since: {start_date}", flush=True)
     
     tickers = get_all_tracked_tickers(s3_client, bucket_name)
     
@@ -151,6 +173,7 @@ def main():
 
     for ticker in tickers:
         try:
+            # Respecting the SEC 10 requests/second limit
             time.sleep(0.15)
             
             processed_count += 1
@@ -163,14 +186,14 @@ def main():
                 conviction_score = calculate_conviction_score(transactions)
                 summary_object = {
                     "ticker": ticker,
-                    "conviction_score": conviction_score,
+                    "vector_3_score": conviction_score,
                     "last_updated": datetime.now().strftime("%Y-%m-%d"),
                     "insider_transactions": transactions
                 }
                 
-                # Adding ALL valid findings to our master list
                 all_opportunities.append(summary_object)
                 
+                # Output directly to the dashboard path as JSON
                 file_key = f"dashboard/insider_trading/{ticker}_insiders.json"
                 if bucket_name:
                     s3_client.put_object(
@@ -181,14 +204,14 @@ def main():
             print(f"Warning: Failed processing {ticker} due to error: {e}", flush=True)
             continue
 
-    all_opportunities.sort(key=lambda x: x['conviction_score'], reverse=True)
+    all_opportunities.sort(key=lambda x: x['vector_3_score'], reverse=True)
     
     if bucket_name and all_opportunities:
         s3_client.put_object(
             Bucket=bucket_name, Key="dashboard/insider_trading/ranked_opportunities.json",
             Body=json.dumps(all_opportunities, indent=4), ContentType='application/json'
         )
-        print(f"Successfully uploaded all {len(all_opportunities)} Insider Records to S3.", flush=True)
+        print(f"Successfully uploaded all {len(all_opportunities)} Vector 3 Records to S3.", flush=True)
     else:
         print(f"Finished script. Processed {len(tickers)} tickers. However, found ZERO transactions. Upload skipped.", flush=True)
 

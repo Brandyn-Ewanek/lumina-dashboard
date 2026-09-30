@@ -4,8 +4,19 @@ import {
   ChevronRight, Bell, Menu, Sparkles, Filter, Plus, Check, ListOrdered, 
   RefreshCw, AlertTriangle, Loader2, Star, Briefcase, X, PieChart,
   ArrowUpRight, ArrowDownRight, Users, DollarSign, ShieldAlert,
-  Database, Table, FileText, CheckCircle2, Calendar
+  Database, Table, FileText, CheckCircle2, Calendar,
+  Target, ShieldCheck, Flame
 } from 'lucide-react';
+import {
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  ZAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
 
 const globalStyles = `
   @keyframes water-ripple {
@@ -356,6 +367,7 @@ export default function App() {
         <div className="flex-1 px-4 space-y-2 mt-4 custom-scrollbar overflow-y-auto pb-4">
           <NavItem icon={<Activity size={18} />} label="Macro Screener" active={activeTab === 'macro'} onClick={() => handleTabChange('macro', 'Macro Screener')} />
           <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => handleTabChange('portfolio', 'Portfolio Tracker')} />
+          <NavItem icon={<Target size={18} />} label="Lumina Matrix" active={activeTab === 'matrix'} onClick={() => handleTabChange('matrix', 'Lumina Matrix')} />
           <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => handleTabChange('deep', 'Target Analysis')} />
           <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => handleTabChange('bench', 'Macro Correlator')} />
           <NavItem icon={<Users size={18} />} label="Insider Tracking" active={activeTab === 'insider'} onClick={() => handleTabChange('insider', 'Insider Tracking')} />
@@ -433,6 +445,16 @@ export default function App() {
             )}
             {activeTab === 'portfolio' && (
               <PortfolioTracker watchList={watchList} toggleWatchList={toggleWatchList} data={liveData} />
+            )}
+            {activeTab === 'matrix' && (
+              <LuminaMatrix 
+                data={liveData} 
+                insiderData={insiderData} 
+                savedStocks={savedStocks} 
+                toggleSaved={toggleSavedStock} 
+                watchList={watchList} 
+                toggleWatchList={toggleWatchList} 
+              />
             )}
             {activeTab === 'macro' && (
               <MacroScreener data={liveData} savedStocks={savedStocks} toggleSaved={toggleSavedStock} />
@@ -3023,6 +3045,364 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
         </div>
       </div>
       
+    </div>
+  );
+}
+
+// ==========================================
+// LUMINA MATRIX (100-POINT CONVICTION ENGINE)
+// ==========================================
+function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, toggleWatchList }) {
+  const [selectedTicker, setSelectedTicker] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortKey, setSortKey] = useState('total_score');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [marketFilter, setMarketFilter] = useState('All');
+
+  // Map insider records by ticker for quick lookup
+  const insiderMap = useMemo(() => {
+    const map = new Map();
+    (insiderData || []).forEach(item => {
+      if (item.ticker) map.set(item.ticker, item);
+    });
+    return map;
+  }, [insiderData]);
+
+  // Merge the S3 data rows with the Vector 3 insider scores
+  const processedData = useMemo(() => {
+    return data.map(stock => {
+      const rec = stock.latestRecord || {};
+      const insiderEntry = insiderMap.get(stock.t);
+
+      const v1 = Number(rec.temporary_scare_score ?? 0);
+      const v2 = Number(rec.margin_of_safety_score ?? 0);
+      const v3 = Number(insiderEntry?.vector_3_score ?? 0);
+      const v4 = Number(rec.vector_4_score ?? 0);
+      const total = Math.min(100, Math.round((v1 + v2 + v3 + v4) * 10) / 10);
+
+      return {
+        ...stock,
+        v1,
+        v2,
+        v3,
+        v4,
+        total_score: total,
+        opportunity_x: v1,
+        armor_y: Math.round((v2 + v4) * 10) / 10,
+        catalyst_type: rec.catalyst_type || 'None',
+        news_severity: rec.news_severity ?? 0.5,
+        recent_news: rec.recent_news || 'No recent catalyst news logged.',
+        forwardPE: Number(rec.forwardPE ?? 0),
+        debtToEquity: Number(rec.debtToEquity ?? 0),
+        shortPercentOfFloat: Number(rec.shortPercentOfFloat ?? 0),
+        insiderTransactions: insiderEntry?.insider_transactions || []
+      };
+    });
+  }, [data, insiderMap]);
+
+  // Set default selection
+  useEffect(() => {
+    if (!selectedTicker && processedData.length > 0) {
+      setSelectedTicker(processedData[0].t);
+    }
+  }, [processedData, selectedTicker]);
+
+  // Sorting and Filtering
+  const filteredData = useMemo(() => {
+    return processedData
+      .filter(s => {
+        const matchesSearch = s.t.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              s.n.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesMarket = marketFilter === 'All' || s.idx === marketFilter;
+        return matchesSearch && matchesMarket;
+      })
+      .sort((a, b) => {
+        const valA = a[sortKey] ?? 0;
+        const valB = b[sortKey] ?? 0;
+        return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      });
+  }, [processedData, searchTerm, marketFilter, sortKey, sortAsc]);
+
+  const activeStock = processedData.find(s => s.t === selectedTicker) || processedData[0];
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  if (!activeStock) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-3" />
+        <p>Assembling Lumina Multi-Vector Data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-7xl animate-slide-up">
+      {/* ========================================================================= */}
+      {/* 1. TOP PANEL: 2D ASYMMETRY SCATTER MATRIX                                 */}
+      {/* ========================================================================= */}
+      <div className="bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-6 backdrop-blur-2xl shadow-xl shadow-black/40">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+          <div>
+            <h2 className="text-2xl font-serif font-medium text-amber-50/90 tracking-wide flex items-center gap-2">
+              <Target size={24} className="text-emerald-400" />
+              Lumina Conviction Matrix
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Top-Right Quadrant = High Mispricing Opportunity + Balance Sheet Armor. Bubble Size = Insider Cash Conviction.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"/> Rating ≥ 75</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block"/> Rating 60–74</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block"/> Rating &lt; 60</span>
+          </div>
+        </div>
+
+        <div className="h-72 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 20, bottom: 25, left: 10 }}>
+              <XAxis 
+                type="number" 
+                dataKey="opportunity_x" 
+                domain={[0, 35]} 
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{ value: 'Vector 1: Catalyst Severity Divergence (Max 35)', position: 'insideBottom', offset: -15, fill: '#64748b', fontSize: 11 }}
+              />
+              <YAxis 
+                type="number" 
+                dataKey="armor_y" 
+                domain={[0, 40]} 
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{ value: 'Armor: Margin of Safety + Solvency (Max 40)', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }}
+              />
+              <ZAxis type="number" dataKey="v3" range={[50, 450]} />
+              <Tooltip 
+                cursor={{ strokeDasharray: '3 3' }}
+                content={({ payload }) => {
+                  if (!payload || !payload.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div className="bg-[#0a1128]/95 border border-[#1e3a8a]/80 p-3 rounded-xl shadow-2xl text-xs space-y-1">
+                      <p className="font-bold text-white text-sm">{d.t} — {d.n}</p>
+                      <p className="text-emerald-400 font-bold">Lumina Rating: {d.total_score} / 100</p>
+                      <p className="text-purple-300">V1 Catalyst Scare: {d.v1} / 35</p>
+                      <p className="text-cyan-300">V2 Target Margin: {d.v2} / 25</p>
+                      <p className="text-emerald-300">V3 Insider Conviction: {d.v3} / 25</p>
+                      <p className="text-amber-300">V4 Financial Resilience: {d.v4} / 15</p>
+                    </div>
+                  );
+                }}
+              />
+              <Scatter 
+                data={processedData} 
+                onClick={(e) => setSelectedTicker(e.t)}
+                className="cursor-pointer"
+              >
+                {processedData.map((entry) => {
+                  const score = entry.total_score || 0;
+                  const fill = entry.t === selectedTicker ? '#f59e0b' : score >= 75 ? '#10b981' : score >= 60 ? '#06b6d4' : '#475569';
+                  return <Cell key={`cell-${entry.t}`} fill={fill} stroke="#07050f" strokeWidth={1} />;
+                })}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. BOTTOM SPLIT: 2A SCREENER TABLE (LEFT) + 2B DOSSIER (RIGHT)            */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* PANEL 2A: MULTI-FACTOR WATCHLIST TABLE (7 COLS) */}
+        <div className="lg:col-span-7 bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-5 shadow-xl flex flex-col">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-3">
+            <h3 className="font-serif font-medium text-slate-200 text-lg">Factor Screener</h3>
+            <div className="flex items-center gap-2">
+              <select 
+                className="bg-[#07050f]/80 border border-[#2d254f]/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none"
+                value={marketFilter} 
+                onChange={(e) => setMarketFilter(e.target.value)}
+              >
+                <option value="All">All Markets</option>
+                <option value="S&P 500">S&P 500</option>
+                <option value="S&P 400">S&P 400</option>
+                <option value="S&P 600">S&P 600</option>
+                <option value="TSX">TSX</option>
+              </select>
+
+              <div className="relative w-44">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-500" />
+                <input 
+                  type="text" 
+                  placeholder="Filter ticker..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/60 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar flex-1 max-h-[520px]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="sticky top-0 bg-[#111c38] z-10 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr className="border-b border-[#2d254f]/50">
+                  <th className="py-2.5 px-3 cursor-pointer" onClick={() => handleSort('t')}>Ticker</th>
+                  <th className="py-2.5 px-3 cursor-pointer text-right" onClick={() => handleSort('close')}>Price</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-purple-400" onClick={() => handleSort('v1')}>V1 (35)</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-cyan-400" onClick={() => handleSort('v2')}>V2 (25)</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-emerald-400" onClick={() => handleSort('v3')}>V3 (25)</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-amber-400" onClick={() => handleSort('v4')}>V4 (15)</th>
+                  <th className="py-2.5 px-3 cursor-pointer text-right" onClick={() => handleSort('total_score')}>Lumina</th>
+                  <th className="py-2.5 px-2 text-center">Save</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#2d254f]/30">
+                {filteredData.map((stock) => {
+                  const isSelected = stock.t === selectedTicker;
+                  const isSaved = savedStocks.includes(stock.t);
+                  return (
+                    <tr 
+                      key={stock.t}
+                      onClick={() => setSelectedTicker(stock.t)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected ? 'bg-[#1b254b]/60 border-l-2 border-l-cyan-400' : 'hover:bg-[#16122b]/60'
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 font-bold text-white">
+                        {stock.t}
+                        <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[110px]">
+                          {stock.n}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-200">
+                        ${stock.close?.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-mono text-purple-300">{stock.v1}</td>
+                      <td className="py-2.5 px-2 text-center font-mono text-cyan-300">{stock.v2}</td>
+                      <td className="py-2.5 px-2 text-center font-mono text-emerald-300">{stock.v3}</td>
+                      <td className="py-2.5 px-2 text-center font-mono text-amber-300">{stock.v4}</td>
+                      <td className="py-2.5 px-3 text-right">
+                        <span className={`inline-block px-2 py-0.5 rounded font-mono font-bold text-xs ${
+                          stock.total_score >= 75 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+                          stock.total_score >= 60 ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' :
+                          'bg-slate-800/60 text-slate-400'
+                        }`}>
+                          {stock.total_score}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          onClick={() => toggleSaved(stock.t)}
+                          className={`p-1 rounded-full transition-colors ${isSaved ? 'text-blue-400' : 'text-slate-600 hover:text-slate-300'}`}
+                        >
+                          {isSaved ? <Check size={14} /> : <Plus size={14} />}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* PANEL 2B: ACTIVE STOCK FORENSIC DOSSIER (5 COLS) */}
+        <div className="lg:col-span-5 bg-[#0d0b1a]/80 border border-[#2d254f]/50 rounded-3xl p-6 shadow-xl flex flex-col gap-4">
+          <div className="border-b border-[#2d254f]/50 pb-4 flex justify-between items-start">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-2xl font-bold text-white tracking-tight">{activeStock.t}</h3>
+                <button 
+                  onClick={() => toggleWatchList(activeStock.t)}
+                  className={`p-1 rounded-lg border transition-all ${
+                    watchList.includes(activeStock.t) ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-[#111c38] border-[#1e3a8a]/50 text-slate-500 hover:text-amber-400'
+                  }`}
+                  title={watchList.includes(activeStock.t) ? "In Portfolio" : "Add to Portfolio"}
+                >
+                  <Star size={16} fill={watchList.includes(activeStock.t) ? 'currentColor' : 'none'} />
+                </button>
+                <span className="text-[10px] bg-[#111c38] px-2 py-0.5 rounded text-blue-300 border border-[#1e3a8a]/40 font-bold">{activeStock.idx}</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">{activeStock.n} • {activeStock.sec}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-3xl font-black text-emerald-400 font-mono">{activeStock.total_score}</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-bold">Lumina Index</span>
+            </div>
+          </div>
+
+          {/* Factor Breakdown Stacked Progress Bar */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-300">Factor Decomposition (100 Pts)</span>
+            <div className="w-full h-3 bg-[#07050f] rounded-full flex overflow-hidden border border-[#2d254f]/50">
+              <div style={{ width: `${(activeStock.v1 / 100) * 100}%` }} className="bg-purple-500" title="V1: Catalyst Divergence" />
+              <div style={{ width: `${(activeStock.v2 / 100) * 100}%` }} className="bg-cyan-500" title="V2: Margin of Safety" />
+              <div style={{ width: `${(activeStock.v3 / 100) * 100}%` }} className="bg-emerald-500" title="V3: Insider Fuel" />
+              <div style={{ width: `${(activeStock.v4 / 100) * 100}%` }} className="bg-amber-500" title="V4: Resilience" />
+            </div>
+            <div className="flex justify-between text-[10px] font-mono text-slate-400">
+              <span className="text-purple-400">V1: {activeStock.v1}</span>
+              <span className="text-cyan-400">V2: {activeStock.v2}</span>
+              <span className="text-emerald-400">V3: {activeStock.v3}</span>
+              <span className="text-amber-400">V4: {activeStock.v4}</span>
+            </div>
+          </div>
+
+          {/* Vector 1 Catalyst News Receipt */}
+          <div className="bg-[#07050f]/80 p-3.5 rounded-2xl border border-[#2d254f]/50 text-xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-semibold text-purple-400 flex items-center gap-1.5">
+                <Flame size={14} /> AI Catalyst: {activeStock.catalyst_type}
+              </span>
+              <span className="text-[10px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">
+                Severity: {activeStock.news_severity}
+              </span>
+            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed line-clamp-3 italic">
+              "{activeStock.recent_news}"
+            </p>
+          </div>
+
+          {/* Vector 3 SEC Form 4 Activity Summary */}
+          <div className="bg-[#07050f]/80 p-3.5 rounded-2xl border border-[#2d254f]/50 text-xs">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1.5 mb-1.5">
+              <Users size={14} /> SEC Form 4 Activity
+            </span>
+            <p className="text-[11px] text-slate-300">
+              Insider Conviction: <span className="text-white font-mono font-bold">{activeStock.v3} / 25 pts</span>.
+              {activeStock.insiderTransactions.length > 0 
+                ? ` Logged ${activeStock.insiderTransactions.length} open-market transactions with exponential decay.`
+                : ' No recent Form 4 open-market transactions detected.'}
+            </p>
+          </div>
+
+          {/* Vector 4 Multiples & Resilience Check */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#07050f]/80 p-3 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Forward P/E</span>
+              <span className="font-mono text-white text-base">
+                {activeStock.forwardPE > 0 ? `${activeStock.forwardPE.toFixed(1)}x` : 'N/A'}
+              </span>
+            </div>
+            <div className="bg-[#07050f]/80 p-3 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Debt / Equity</span>
+              <span className="font-mono text-white text-base">
+                {activeStock.debtToEquity > 0 ? `${(activeStock.debtToEquity / 100).toFixed(2)}x` : '0.00x'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

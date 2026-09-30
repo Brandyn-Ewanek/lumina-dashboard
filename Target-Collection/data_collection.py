@@ -512,7 +512,82 @@ def get_yahoo_data(ticker, index_name):
         return {'Ticker': ticker, 'Error': str(e)}
 
 # ==========================================
-# 4. S3 FILE MANAGEMENT
+# 4. COMPOSITE SCORING (VECTOR 4)
+# ==========================================
+def calculate_vector_4_composite(today_df):
+    """
+    Calculates the 15-point Financial Resilience Vector.
+    Assumes missing or null data defaults to a conservative neutral score.
+    """
+    # 1. Calculate the moving Industry Medians for Forward P/E dynamically
+    valid_pe = today_df[today_df['forwardPE'] > 0]
+    industry_medians = valid_pe.groupby('industry')['forwardPE'].median().to_dict()
+    
+    scores = []
+    for _, row in today_df.iterrows():
+        # --- PILLAR 1: Valuation & Cash Flow (Max 6.0) ---
+        ind = row.get('industry')
+        fwd_pe = row.get('forwardPE')
+        med_pe = industry_medians.get(ind, 20.0)
+        
+        # Relative P/E (Max 3.0)
+        if pd.notnull(fwd_pe) and fwd_pe > 0 and med_pe > 0:
+            discount = (med_pe - fwd_pe) / med_pe
+            pe_score = max(0.0, min(3.0, 1.5 + (discount / 0.30) * 1.5))
+        else:
+            pe_score = 1.0 # Neutral penalty
+            
+        # Free Cash Flow Yield (Max 3.0)
+        fcf = row.get('freeCashflow')
+        shares = row.get('floatShares')
+        close = row.get('close')
+        
+        if pd.notnull(fcf) and pd.notnull(shares) and pd.notnull(close) and shares > 0 and close > 0:
+            fcf_yield = fcf / (close * shares)
+            fcf_score = min(3.0, (fcf_yield / 0.08) * 3.0) if fcf_yield > 0 else 0.0
+        else:
+            fcf_score = 1.0
+            
+        p1 = pe_score + fcf_score
+        
+        # --- PILLAR 2: Fortress Balance Sheet (Max 5.0) ---
+        de = row.get('debtToEquity')
+        cr = row.get('currentRatio')
+        roe = row.get('returnOnEquity')
+        
+        # Debt-to-Equity (Max 2.5) - yfinance provides this as a percentage (e.g. 50 = 0.50x)
+        if pd.notnull(de) and de >= 0:
+            if de <= 50.0: de_score = 2.5
+            elif de <= 120.0: de_score = 1.5
+            elif de <= 200.0: de_score = 0.75
+            else: de_score = 0.0
+        else:
+            de_score = 1.0
+            
+        # Liquidity and Moat (Max 2.5)
+        cr_score = 1.25 if (pd.notnull(cr) and cr >= 1.3) else (0.6 if (pd.notnull(cr) and cr >= 1.0) else 0.0)
+        roe_score = 1.25 if (pd.notnull(roe) and roe >= 0.12) else (0.6 if (pd.notnull(roe) and roe > 0) else 0.0)
+        
+        p2 = de_score + cr_score + roe_score
+        
+        # --- PILLAR 3: Short Float Spring (Max 4.0) ---
+        sf = row.get('shortPercentOfFloat')
+        if pd.notnull(sf) and sf > 0:
+            if sf >= 0.12: p3 = 4.0      # >12% heavily shorted
+            elif sf >= 0.07: p3 = 3.0    # 7-12% 
+            elif sf >= 0.03: p3 = 2.0    # 3-7% normal
+            else: p3 = 1.0               # <3% low interest
+        else:
+            p3 = 1.0
+            
+        total_v4 = round(p1 + p2 + p3, 2)
+        scores.append(total_v4)
+        
+    today_df['vector_4_score'] = scores
+    return today_df
+
+# ==========================================
+# 5. S3 FILE MANAGEMENT
 # ==========================================
 def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s3_client):
     s3_key = f"data/today/{index_id}_latest.csv"
@@ -536,7 +611,7 @@ def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s
         print(f"✅ Appended today's data to master file for {index_display_name}. Total rows: {len(combined_df)}")
         
     except s3_client.exceptions.NoSuchKey:
-        print(f"⚠️ No existing master file found for {index_display_name}. Creating new.")
+        print(f"⚠️️ No existing master file found for {index_display_name}. Creating new.")
         csv_buffer = StringIO()
         today_df.to_csv(csv_buffer, index=False)
         s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_buffer.getvalue())
@@ -550,7 +625,7 @@ def save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s
         s3_client.put_object(Bucket=bucket_name, Key=backup_key, Body=csv_buffer.getvalue())
 
 # ==========================================
-# 5. MAIN EXECUTION PIPELINE
+# 6. MAIN EXECUTION PIPELINE
 # ==========================================
 def main():
     today_obj = datetime.today()
@@ -613,10 +688,8 @@ def main():
                 if upside_pct is None or upside_pct <= 0:
                     temp_scare_score = 0.0
                 else:
-                    # Convert percentage to decimal and normalize to an 80% maximum upside scale
                     upside_dec = upside_pct / 100.0
                     u_norm = min(upside_dec / 0.80, 1.0)
-                    # Non-linear divergence formula: Punishes high-severity value traps
                     temp_scare_score = 35.0 * (u_norm**0.4) * (1.0 - severity**1.7)
                 
                 # ==============================================================
@@ -643,6 +716,10 @@ def main():
         if successful_data:
             today_df = pd.DataFrame(successful_data)
             today_df.insert(0, 'date', today_str) 
+            
+            # ---> COMPUTE VECTOR 4 ACROSS THE DATASET <---
+            today_df = calculate_vector_4_composite(today_df)
+            
             save_and_append_to_s3(today_df, bucket_name, index_id, index_display_name, s3_client)
             
             # Archive backup

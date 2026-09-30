@@ -3052,6 +3052,11 @@ function InsiderTracking({ data, topOpportunities, savedStocks, toggleSaved, wat
 // ==========================================
 // LUMINA MATRIX (100-POINT CONVICTION ENGINE)
 // ==========================================
+// ==========================================
+// LUMINA MATRIX (100-POINT SCORING ENGINE)
+// ==========================================
+// LUMINA MATRIX (100-POINT CONVICTION ENGINE)
+// ==========================================
 function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, toggleWatchList }) {
   const [selectedTicker, setSelectedTicker] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -3100,17 +3105,13 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
     });
   }, [data, insiderMap]);
 
-  // Set default selection
-  useEffect(() => {
-    if (!selectedTicker && processedData.length > 0) {
-      setSelectedTicker(processedData[0].t);
-    }
-  }, [processedData, selectedTicker]);
-
   // Sorting and Filtering
   const filteredData = useMemo(() => {
     return processedData
       .filter(s => {
+        // ONLY KEEP STOCKS IN THE WATCHLIST
+        if (!watchList.includes(s.t)) return false;
+
         const matchesSearch = s.t.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               s.n.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesMarket = marketFilter === 'All' || s.idx === marketFilter;
@@ -3121,9 +3122,16 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
         const valB = b[sortKey] ?? 0;
         return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
       });
-  }, [processedData, searchTerm, marketFilter, sortKey, sortAsc]);
+  }, [processedData, searchTerm, marketFilter, sortKey, sortAsc, watchList]);
 
-  const activeStock = processedData.find(s => s.t === selectedTicker) || processedData[0];
+  // Set default selection to the first item in the filtered list
+  useEffect(() => {
+    if (filteredData.length > 0 && (!selectedTicker || !filteredData.find(s => s.t === selectedTicker))) {
+      setSelectedTicker(filteredData[0].t);
+    }
+  }, [filteredData, selectedTicker]);
+
+  const activeStock = filteredData.find(s => s.t === selectedTicker) || filteredData[0];
 
   const handleSort = (key) => {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -3132,6 +3140,19 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
       setSortAsc(false);
     }
   };
+
+  // EMPTY STATE IF WATCHLIST IS EMPTY
+  if (watchList.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] animate-slide-up text-center">
+        <div className="w-24 h-24 rounded-full bg-[#111c38]/80 border border-emerald-500/30 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+          <Target size={40} className="text-emerald-400" />
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-2">Matrix Queue Empty</h2>
+        <p className="text-slate-400 max-w-md">Save stocks to your Portfolio from the Screener or Tracker to analyze their conviction scores.</p>
+      </div>
+    );
+  }
 
   if (!activeStock) {
     return (
@@ -3200,12 +3221,13 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
                   );
                 }}
               />
+              {}
               <Scatter 
-                data={processedData} 
-                onClick={(e) => setSelectedTicker(e.t)}
+                data={filteredData} 
+                onClick={(e) => { if (e && e.t) setSelectedTicker(e.t); }}
                 className="cursor-pointer"
               >
-                {processedData.map((entry) => {
+                {filteredData.map((entry) => {
                   const score = entry.total_score || 0;
                   const fill = entry.t === selectedTicker ? '#f59e0b' : score >= 75 ? '#10b981' : score >= 60 ? '#06b6d4' : '#475569';
                   return <Cell key={`cell-${entry.t}`} fill={fill} stroke="#07050f" strokeWidth={1} />;
@@ -3255,18 +3277,19 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
             <table className="w-full text-left border-collapse text-xs">
               <thead className="sticky top-0 bg-[#111c38] z-10 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr className="border-b border-[#2d254f]/50">
-                  <th className="py-2.5 px-3 cursor-pointer" onClick={() => handleSort('t')}>Ticker</th>
-                  <th className="py-2.5 px-3 cursor-pointer text-right" onClick={() => handleSort('close')}>Price</th>
-                  <th className="py-2.5 px-2 cursor-pointer text-center text-purple-400" onClick={() => handleSort('v1')}>V1 (35)</th>
-                  <th className="py-2.5 px-2 cursor-pointer text-center text-cyan-400" onClick={() => handleSort('v2')}>V2 (25)</th>
-                  <th className="py-2.5 px-2 cursor-pointer text-center text-emerald-400" onClick={() => handleSort('v3')}>V3 (25)</th>
-                  <th className="py-2.5 px-2 cursor-pointer text-center text-amber-400" onClick={() => handleSort('v4')}>V4 (15)</th>
-                  <th className="py-2.5 px-3 cursor-pointer text-right" onClick={() => handleSort('total_score')}>Lumina</th>
+                  <th className="py-2.5 px-3 cursor-pointer hover:text-white" onClick={() => handleSort('t')}>Ticker {sortKey === 't' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-3 cursor-pointer text-right hover:text-white" onClick={() => handleSort('close')}>Price {sortKey === 'close' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-purple-400 hover:text-purple-300" onClick={() => handleSort('v1')}>V1 (35) {sortKey === 'v1' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-cyan-400 hover:text-cyan-300" onClick={() => handleSort('v2')}>V2 (25) {sortKey === 'v2' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-emerald-400 hover:text-emerald-300" onClick={() => handleSort('v3')}>V3 (25) {sortKey === 'v3' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-2 cursor-pointer text-center text-amber-400 hover:text-amber-300" onClick={() => handleSort('v4')}>V4 (15) {sortKey === 'v4' ? (sortAsc ? '↑' : '↓') : ''}</th>
+                  <th className="py-2.5 px-3 cursor-pointer text-right hover:text-white" onClick={() => handleSort('total_score')}>Lumina {sortKey === 'total_score' ? (sortAsc ? '↑' : '↓') : ''}</th>
                   <th className="py-2.5 px-2 text-center">Save</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#2d254f]/30">
-                {filteredData.map((stock) => {
+                {}
+                {filteredData.slice(0, 100).map((stock) => {
                   const isSelected = stock.t === selectedTicker;
                   const isSaved = savedStocks.includes(stock.t);
                   return (

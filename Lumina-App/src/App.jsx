@@ -3,9 +3,9 @@ import {
   LineChart, Search, TrendingUp, TrendingDown, Activity, Globe, Newspaper,
   ChevronRight, Bell, Menu, Sparkles, Filter, Plus, Check, ListOrdered, 
   RefreshCw, AlertTriangle, Loader2, Star, Briefcase, X, PieChart,
-  ArrowUpRight, ArrowDownRight, Users, DollarSign, ShieldAlert,
+  ArrowUpRight, ArrowDownRight, Users, DollarSign,
   Database, Table, FileText, CheckCircle2, Calendar,
-  Target, ShieldCheck, Flame
+  Target, Flame
 } from 'lucide-react';
 import {
   ScatterChart,

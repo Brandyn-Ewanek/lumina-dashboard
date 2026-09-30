@@ -3230,7 +3230,7 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
               >
                 {filteredData.map((entry) => {
                   const score = entry.total_score || 0;
-                  const fill = entry.t === selectedTicker ? '#f59e0b' : score >= 75 ? '#10b981' : score >= 60 ? '#06b6d4' : '#475569';
+                  const fill = entry.t === selectedTicker ? '#f59e0b' : score >= 75 ? '#10b981' : score >= 60 ? '#06b6d4' : score >= 40 ? '#a855f7' : '#475569';
                   return <Cell key={`cell-${entry.t}`} fill={fill} stroke="#07050f" strokeWidth={1} />;
                 })}
               </Scatter>
@@ -3318,6 +3318,7 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
                         <span className={`inline-block px-2 py-0.5 rounded font-mono font-bold text-xs ${
                           stock.total_score >= 75 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
                           stock.total_score >= 60 ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' :
+                          stock.total_score >= 40 ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30' :
                           'bg-slate-800/60 text-slate-400'
                         }`}>
                           {stock.total_score}

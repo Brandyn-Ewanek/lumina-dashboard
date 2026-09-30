@@ -14,6 +14,16 @@ Lumina is a premium, serverless quantitative finance dashboard built for institu
 
 ## Modules & Features
 
+### Lumina Conviction Matrix
+![Lumina Matrix](Assets/lumina-matrix.png)
+
+*   **The Command Center:** The ultimate culmination of the dashboard's pipelines, fusing target analysis, SEC filings, and AI sentiment into a unified visualization for the user's saved portfolio.
+*   **Multi-Vector Scoring Engine:** Aggregates four distinct institutional factors (Catalyst Severity Divergence, Margin of Safety, Insider Cash Conviction, and Financial Resilience) into a singular 100-point Lumina Index score.
+*   **2D Asymmetry Scatter Plot:** Visualizes the portfolio in a custom quadrant matrix where the X-axis tracks pricing opportunity and the Y-axis tracks balance sheet armor. Bubble size dynamically scales to represent the sheer dollar volume of C-suite insider execution.
+*   **Factor Screener:** A dynamically sortable data table that isolates the user's saved assets, cutting through the noise of the broader 1,500-stock database to focus only on actionable targets.
+*   **Forensic Dossier:** A dedicated inspection panel exposing the granular breakdown of the active asset, including AI-parsed catalyst receipts, the top 3 open-market executive purchases, and a 6-metric fundamental health grid.
+*   **Tech Used:** React (Recharts for multi-axis 2D Matrix), Tailwind CSS, AWS S3 (Consolidated JSON Data Lake).
+
 ### Dashboard Home & System Anomalies
 ![Dashboard Home](Assets/home-dashboard.png)
 
@@ -32,7 +42,6 @@ Lumina is a premium, serverless quantitative finance dashboard built for institu
 *   **Deviation Filtering:** Features dynamic filtering capabilities to screen the market based on the intensity of the target-to-price deviation.
 *   **Hypothesis Confirmation:** As the pipeline continuously aggregates daily data over time, emerging quantitative patterns are being found to confirm *reversion* to **Mean Target Price** hypothesis.
 *   **Tech Used:** React, Tailwind CSS, AWS ECS Fargate (Python collection scripts), AWS EventBridge, AWS S3, AWS Lambda
-
 
 ### Portfolio Tracker & Trajectory Modeling
 ![Portfolio Tracker](Assets/portfolio-tracker.png)
@@ -86,4 +95,4 @@ Lumina is a 100% serverless, decoupled quantitative finance dashboard designed f
 *   **Client (Frontend):** A React single-page application (SPA) hosted on **Vercel** with continuous CI/CD integration. It fetches flat CSVs and JSONs directly from the data lake, completely bypassing the need for an active EC2 web server or SQL database.
 *   **Data Collection (Pipelines):** Dockerized Python scripts run on an automated schedule via **AWS EventBridge** and **ECS Fargate**. They pull institutional targets and macroeconomic data from financial APIs (including FRED), process the data using Pandas, and drop flattened CSVs into the cloud.
 *   **Data Lake (AWS S3):** Acts as the single source of truth. Configured with strict CORS and bucket policies to allow secure, direct access to the frontend. It manages both daily market datasets (CSVs) and persistent user configurations/research baselines (JSONs).
-*   **Serverless Compute (AWS Lambda):** Handles all dynamic state-management (saving Portfolios and Institutional Plays) and orchestrates on-demand AI scraping, querying the **Google Gemini API** to synthesize live financial news. 
+*   **Serverless Compute (AWS Lambda):** Handles all dynamic state-management (saving Portfolios and Institutional Plays) and orchestrates on-demand AI scraping, querying the **Google Gemini API** to synthesize live financial news.

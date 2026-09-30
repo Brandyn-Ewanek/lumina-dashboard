@@ -3409,22 +3409,45 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
           </div>
 
           {/* Vector 4 Multiples & Resilience Check */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#07050f]/80 p-3 rounded-xl border border-[#2d254f]/50">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Forward P/E</span>
-              <span className="font-mono text-white text-base">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Target Upside</span>
+              <span className={`font-mono text-sm font-bold ${activeStock.upside > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {activeStock.upside > 0 ? '+' : ''}{(activeStock.upside || 0).toFixed(1)}%
+              </span>
+            </div>
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Fwd P/E</span>
+              <span className="font-mono text-white text-sm font-bold">
                 {activeStock.forwardPE > 0 ? `${activeStock.forwardPE.toFixed(1)}x` : 'N/A'}
               </span>
             </div>
-            <div className="bg-[#07050f]/80 p-3 rounded-xl border border-[#2d254f]/50">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Debt / Equity</span>
-              <span className="font-mono text-white text-base">
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Trailing P/E</span>
+              <span className="font-mono text-white text-sm font-bold">
+                {activeStock.peRatio > 0 ? `${activeStock.peRatio.toFixed(1)}x` : 'N/A'}
+              </span>
+            </div>
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Debt / Equity</span>
+              <span className="font-mono text-white text-sm font-bold">
                 {activeStock.debtToEquity > 0 ? `${(activeStock.debtToEquity / 100).toFixed(2)}x` : '0.00x'}
+              </span>
+            </div>
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Short Float</span>
+              <span className="font-mono text-white text-sm font-bold">
+                {activeStock.shortPercentOfFloat > 0 ? `${(activeStock.shortPercentOfFloat * 100).toFixed(1)}%` : 'N/A'}
+              </span>
+            </div>
+            <div className="bg-[#07050f]/80 p-2.5 rounded-xl border border-[#2d254f]/50 truncate">
+              <span className="text-[9px] text-slate-500 uppercase font-bold block mb-1">Market Cap</span>
+              <span className="font-mono text-white text-sm font-bold">
+                ${activeStock.marketCap > 1e9 ? (activeStock.marketCap / 1e9).toFixed(1) + 'B' : (activeStock.marketCap / 1e6).toFixed(1) + 'M'}
               </span>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

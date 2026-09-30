@@ -3182,6 +3182,7 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"/> Rating ≥ 75</span>
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block"/> Rating 60–74</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"/> Rating 40–59</span>
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block"/> Rating &lt; 60</span>
           </div>
         </div>

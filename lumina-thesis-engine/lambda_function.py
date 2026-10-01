@@ -6,31 +6,21 @@ from google import genai
 
 s3 = boto3.client('s3')
 BUCKET_NAME = 'lumina-strategies'
-
-# Target the specific 'data/' path from your screenshot
 ACTIVE_THEORIES_KEY = 'data/theories/active.json'
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def lambda_handler(event, context):
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
-        "Access-Control-Allow-Headers": "Content-Type"
-    }
-
-    method = event.get('requestContext', {}).get('http', {}).get('method')
-    if method == 'OPTIONS':
-        return {"statusCode": 200, "headers": headers, "body": ""}
-
-    raw_path = event.get('rawPath', '/')
     
+    raw_path = event.get('rawPath', '/')
+
     try:
-        body = json.loads(event.get('body', '{}'))
+        # Safely parse the body
+        body_str = event.get('body') or '{}'
+        body = json.loads(body_str)
 
         # ROUTE 1: POLISH THESIS (AI SYNTHESIS)
-        if raw_path == '/polish_thesis':
+        if 'polish_thesis' in raw_path:
             prompt = f"""
             You are an institutional portfolio manager. Synthesize the user's raw notes into a rigorous, two-paragraph quantitative thesis.
             Inputs:
@@ -45,19 +35,18 @@ def lambda_handler(event, context):
             """
             
             response = client.models.generate_content(
-                model='gemini-1.5-pro',
+                model='gemini-3.1-pro-preview',
                 contents=prompt
             )
             
             return {
                 "statusCode": 200,
-                "headers": headers,
                 "body": json.dumps({"polished_thesis": response.text})
             }
 
         # ROUTE 2: COMMIT BUY (S3 STATE INGESTION)
-        elif raw_path == '/commit_buy':
-            entry_price = float(body.get('entry_price'))
+        elif 'commit_buy' in raw_path:
+            entry_price = float(body.get('entry_price', 1)) # Fallback to 1 to prevent division by zero
             target_budget = 10000
             shares = int(target_budget // entry_price)
             
@@ -79,7 +68,7 @@ def lambda_handler(event, context):
                     "days_horizon": body.get('horizon_days')
                 },
                 "targets": {
-                    "target_price": float(body.get('target_price')),
+                    "target_price": float(body.get('target_price', 0)),
                 },
                 "thesis_narrative": {
                     "user_raw_notes": body.get('raw_notes'),
@@ -88,10 +77,15 @@ def lambda_handler(event, context):
                 "entry_snapshot": body.get('entry_snapshot', {})
             }
 
-            response = s3.get_object(Bucket=BUCKET_NAME, Key=ACTIVE_THEORIES_KEY)
-            active_theories = json.loads(response['Body'].read().decode('utf-8'))
+            # Try to fetch existing theories, or start a new list if file doesn't exist yet
+            try:
+                s3_response = s3.get_object(Bucket=BUCKET_NAME, Key=ACTIVE_THEORIES_KEY)
+                active_theories = json.loads(s3_response['Body'].read().decode('utf-8'))
+            except Exception:
+                active_theories = []
             
             active_theories.append(new_theory)
+            
             s3.put_object(
                 Bucket=BUCKET_NAME,
                 Key=ACTIVE_THEORIES_KEY,
@@ -101,12 +95,18 @@ def lambda_handler(event, context):
 
             return {
                 "statusCode": 200,
-                "headers": headers,
-                "body": json.dumps({"message": "Theory committed successfully", "theory": new_theory})
+                "body": json.dumps({"message": "Buy committed to S3 successfully", "thesis_id": new_theory["thesis_id"]})
             }
 
-        else:
-            return {"statusCode": 404, "headers": headers, "body": json.dumps({"error": "Route not found"})}
-
     except Exception as e:
-        return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
+        # Catch any AI or JSON errors cleanly (NO headers referenced here)
+        return {
+            "statusCode": 500, 
+            "body": json.dumps({"error": str(e)})
+        }
+
+    # If the URL path doesn't match 'polish_thesis' or 'commit_buy', return a 404
+    return {
+        "statusCode": 404, 
+        "body": json.dumps({"error": f"Route not found: {raw_path}"})
+    }

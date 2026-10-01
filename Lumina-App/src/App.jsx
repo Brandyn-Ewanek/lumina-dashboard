@@ -3469,11 +3469,11 @@ function ThesisVault({ data = [] }) {
   const [draftNotes, setDraftNotes] = useState('');
   const [aiThesis, setAiThesis] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false); // NEW STATE
 
-  // TODO: Paste your new AWS Lambda Function URL here
   const THESIS_LAMBDA_URL = 'https://coeurnp65lku5cuxhl4jmgs1p40ddnrj.lambda-url.ca-central-1.on.aws';
 
-  // Mock Active Data for initial UI styling (We will wire to S3 later)
+  // These are placeholders. In the next step, we will replace this with a fetch from S3!
   const activeTheses = [
     { ticker: 'SITE', entry: 90.93, target: 127.08, current: 95.12, shares: 109, daysLeft: 42, horizon: 90, pnlPct: 4.6, pnlDol: 456.71 },
     { ticker: 'LUN.TO', entry: 11.02, target: 16.50, current: 10.80, shares: 907, daysLeft: 14, horizon: 30, pnlPct: -2.0, pnlDol: -199.54 }
@@ -3500,16 +3500,48 @@ function ThesisVault({ data = [] }) {
       const resData = await response.json();
       setAiThesis(resData.polished_thesis);
     } catch (err) {
-      console.error("Failed to polish thesis:", err);
       setAiThesis("Connection to Lambda failed. Check console for CORS or network errors.");
     }
     setIsPolishing(false);
   };
 
+  // NEW: Function to save the thesis to AWS S3
+  const handleCommitBuy = async () => {
+    setIsCommitting(true);
+    try {
+      const response = await fetch(`${THESIS_LAMBDA_URL}/commit_buy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: draftTicker,
+          entry_price: 100.00, 
+          target_price: 125.00,
+          horizon_days: 90,
+          target_date: "2027-01-01",
+          polished_thesis: aiThesis,
+          raw_notes: draftNotes
+        })
+      });
+      
+      if (response.ok) {
+        alert("Thesis successfully locked into AWS S3!");
+        setIsDrafting(false); // Close the slide-out menu
+        setAiThesis('');      // Clear the form
+        setDraftNotes('');
+        setDraftTicker('');
+      } else {
+        alert("AWS rejected the save. Check console.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reach AWS S3.");
+    }
+    setIsCommitting(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
       
-      {/* HEADER RIBBON */}
       <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-3 drop-shadow-sm">
@@ -3537,7 +3569,6 @@ function ThesisVault({ data = [] }) {
         </div>
       </div>
 
-      {/* TABS */}
       <div className="flex gap-6 border-b border-[#2d254f]/50 mb-4">
         <button 
           onClick={() => setActiveTab('active')}
@@ -3551,7 +3582,6 @@ function ThesisVault({ data = [] }) {
         </button>
       </div>
 
-      {/* DATA GRID */}
       <div className="flex-1 overflow-x-auto custom-scrollbar">
         <table className="w-full text-left text-sm whitespace-nowrap">
           <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
@@ -3601,17 +3631,16 @@ function ThesisVault({ data = [] }) {
         </table>
       </div>
 
-      {/* THESIS MODAL (SLIDE OVER) */}
       {isDrafting && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end">
           <div className="w-full md:w-[600px] h-full bg-[#0d0b1a] border-l border-[#2d254f]/50 p-6 flex flex-col shadow-2xl animate-slide-up overflow-y-auto custom-scrollbar">
             
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
               <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-1.5 rounded-full border border-[#1e3a8a]/50"><X size={18}/></button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-6 shrink-0">
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Ticker Symbol</label>
                 <input 
@@ -3633,14 +3662,14 @@ function ThesisVault({ data = [] }) {
               </div>
             </div>
 
-            <div className="mb-6">
+            <div className="mb-6 shrink-0">
               <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Your Raw Theory (The "Why")</label>
               <textarea 
                 rows="4" 
                 value={draftNotes}
                 onChange={(e) => setDraftNotes(e.target.value)}
                 className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-slate-200 text-sm focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
-                placeholder="What is the market missing? e.g. Temporary supply chain scare crushed the price, but insiders are buying heavily."
+                placeholder="What is the market missing?"
               ></textarea>
               <button 
                 onClick={handlePolishThesis}
@@ -3651,23 +3680,27 @@ function ThesisVault({ data = [] }) {
               </button>
             </div>
 
+            {/* UI FIX: Removed flex-1, added min-h, changed text-sm to text-base */}
             {aiThesis && (
-              <div className="flex-1 bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-5 mb-6 overflow-y-auto custom-scrollbar shadow-inner relative">
+              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 overflow-y-auto min-h-[250px] custom-scrollbar shadow-inner relative shrink-0">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-                <h4 className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-                  <CheckCircle2 className="w-4 h-4" /> Institutional Polish Complete
+                <h4 className="text-xs font-bold text-purple-400 mb-4 flex items-center gap-1.5 uppercase tracking-wider">
+                  <CheckCircle2 className="w-5 h-5" /> Institutional Polish Complete
                 </h4>
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap relative z-10">{aiThesis}</p>
+                <p className="text-base text-slate-200 font-medium leading-relaxed whitespace-pre-wrap relative z-10">{aiThesis}</p>
               </div>
             )}
 
+            {/* NEW: Wired up to handleCommitBuy */}
             <button 
-              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto ${
+              onClick={handleCommitBuy}
+              disabled={!aiThesis || isCommitting}
+              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto shrink-0 ${
                 aiThesis ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] border border-emerald-400/20' : 'bg-[#07050f]/80 text-slate-600 border border-[#2d254f]/50 cursor-not-allowed'
               }`}
             >
-              <DollarSign className="w-5 h-5"/>
-              Commit $10,000 Allocation
+              {isCommitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5"/>}
+              {isCommitting ? 'Saving to AWS S3...' : 'Commit $10,000 Allocation'}
             </button>
           </div>
         </div>

@@ -3632,28 +3632,28 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end">
-          <div className="w-full md:w-[600px] h-full bg-[#0d0b1a] border-l border-[#2d254f]/50 p-6 flex flex-col shadow-2xl animate-slide-up overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4">
+          <div className="w-full max-w-3xl max-h-[90vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up overflow-y-auto custom-scrollbar relative">
             
             <div className="flex justify-between items-center mb-6 shrink-0">
-              <h3 className="text-xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
-              <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-1.5 rounded-full border border-[#1e3a8a]/50"><X size={18}/></button>
+              <h3 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
+              <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={20}/></button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6 shrink-0">
+            <div className="grid grid-cols-2 gap-6 mb-6 shrink-0">
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Ticker Symbol</label>
+                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Ticker Symbol</label>
                 <input 
                   type="text" 
                   value={draftTicker}
                   onChange={(e) => setDraftTicker(e.target.value.toUpperCase())}
-                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-purple-500 shadow-inner" 
+                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-white font-mono focus:outline-none focus:border-purple-500 shadow-inner text-lg" 
                   placeholder="e.g. SITE"
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Time Horizon</label>
-                <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 shadow-inner appearance-none">
+                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Time Horizon</label>
+                <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500 shadow-inner appearance-none text-lg">
                   <option value="30">30 Days (Tactical)</option>
                   <option value="90">90 Days (Quarterly)</option>
                   <option value="180">180 Days (Half-Year)</option>
@@ -3663,43 +3663,41 @@ function ThesisVault({ data = [] }) {
             </div>
 
             <div className="mb-6 shrink-0">
-              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Your Raw Theory (The "Why")</label>
+              <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Your Raw Theory (The "Why")</label>
               <textarea 
                 rows="4" 
                 value={draftNotes}
                 onChange={(e) => setDraftNotes(e.target.value)}
-                className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-slate-200 text-sm focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
+                className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-4 text-slate-200 text-base focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
                 placeholder="What is the market missing?"
               ></textarea>
               <button 
                 onClick={handlePolishThesis}
                 disabled={isPolishing || !draftTicker || !draftNotes}
-                className="mt-3 w-full bg-[#111c38] hover:bg-[#1e3a8a]/80 disabled:opacity-50 text-purple-400 font-bold py-3 rounded-xl flex justify-center items-center gap-2 border border-[#1e3a8a]/50 transition-colors shadow-lg">
-                {isPolishing ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4" />}
+                className="mt-4 w-full bg-[#111c38] hover:bg-[#1e3a8a]/80 disabled:opacity-50 text-purple-400 font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 border border-[#1e3a8a]/50 transition-colors shadow-lg text-lg">
+                {isPolishing ? <Loader2 className="w-5 h-5 animate-spin"/> : <BrainCircuit className="w-5 h-5" />}
                 {isPolishing ? 'Gemini is Reasoning...' : 'Synthesize Institutional Thesis'}
               </button>
             </div>
 
-            {/* UI FIX: Removed flex-1, added min-h, changed text-sm to text-base */}
             {aiThesis && (
-              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 overflow-y-auto min-h-[250px] custom-scrollbar shadow-inner relative shrink-0">
+              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 overflow-y-auto min-h-[200px] custom-scrollbar shadow-inner relative shrink-0">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-                <h4 className="text-xs font-bold text-purple-400 mb-4 flex items-center gap-1.5 uppercase tracking-wider">
+                <h4 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
                   <CheckCircle2 className="w-5 h-5" /> Institutional Polish Complete
                 </h4>
                 <p className="text-base text-slate-200 font-medium leading-relaxed whitespace-pre-wrap relative z-10">{aiThesis}</p>
               </div>
             )}
 
-            {/* NEW: Wired up to handleCommitBuy */}
             <button 
               onClick={handleCommitBuy}
               disabled={!aiThesis || isCommitting}
-              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto shrink-0 ${
+              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto shrink-0 text-lg ${
                 aiThesis ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] border border-emerald-400/20' : 'bg-[#07050f]/80 text-slate-600 border border-[#2d254f]/50 cursor-not-allowed'
               }`}
             >
-              {isCommitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5"/>}
+              {isCommitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <DollarSign className="w-6 h-6"/>}
               {isCommitting ? 'Saving to AWS S3...' : 'Commit $10,000 Allocation'}
             </button>
           </div>

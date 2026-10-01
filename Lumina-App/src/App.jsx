@@ -3471,7 +3471,7 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
 
   // TODO: Paste your new AWS Lambda Function URL here
-  const THESIS_LAMBDA_URL = 'https://coeurnp65lku5cuxhl4jmgslp40ddnrj.lambda-url.ca-central-1.on.aws/';
+  const THESIS_LAMBDA_URL = 'https://coeurnp65lku5cuxhl4jmgs1p40ddnrj.lambda-url.ca-central-1.on.aws';
 
   // Mock Active Data for initial UI styling (We will wire to S3 later)
   const activeTheses = [

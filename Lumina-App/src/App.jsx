@@ -5,7 +5,7 @@ import {
   RefreshCw, AlertTriangle, Loader2, Star, Briefcase, X, PieChart,
   ArrowUpRight, ArrowDownRight, Users, DollarSign,
   Database, Table, FileText, CheckCircle2, Calendar,
-  Target, Flame
+  Target, Flame, BrainCircuit, XCircle, CheckCircle
 } from 'lucide-react';
 import {
   ScatterChart,
@@ -367,6 +367,7 @@ export default function App() {
         <div className="flex-1 px-4 space-y-2 mt-4 custom-scrollbar overflow-y-auto pb-4">
           <NavItem icon={<Activity size={18} />} label="Macro Screener" active={activeTab === 'macro'} onClick={() => handleTabChange('macro', 'Macro Screener')} />
           <NavItem icon={<Briefcase size={18} />} label="Portfolio Tracker" active={activeTab === 'portfolio'} onClick={() => handleTabChange('portfolio', 'Portfolio Tracker')} />
+          <NavItem icon={<BrainCircuit size={18} />} label="Thesis Vault" active={activeTab === 'thesis'} onClick={() => handleTabChange('thesis', 'Thesis Vault')} />
           <NavItem icon={<Target size={18} />} label="Lumina Matrix" active={activeTab === 'matrix'} onClick={() => handleTabChange('matrix', 'Lumina Matrix')} />
           <NavItem icon={<LineChart size={18} />} label="Target Analysis" active={activeTab === 'deep'} onClick={() => handleTabChange('deep', 'Target Analysis')} />
           <NavItem icon={<Globe size={18} />} label="Economic Analysis" active={activeTab === 'bench'} onClick={() => handleTabChange('bench', 'Macro Correlator')} />
@@ -446,6 +447,10 @@ export default function App() {
             {activeTab === 'portfolio' && (
               <PortfolioTracker watchList={watchList} toggleWatchList={toggleWatchList} data={liveData} />
             )}
+            {activeTab === 'thesis' && (
+              <ThesisVault data={liveData} />
+            )}
+
             {activeTab === 'matrix' && (
               <LuminaMatrix 
                 data={liveData} 
@@ -3451,6 +3456,222 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+// ==========================================
+// THESIS VAULT (PAPER TRADING ENGINE)
+// ==========================================
+function ThesisVault({ data = [] }) {
+  const [activeTab, setActiveTab] = useState('active');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [draftTicker, setDraftTicker] = useState('');
+  const [draftNotes, setDraftNotes] = useState('');
+  const [aiThesis, setAiThesis] = useState('');
+  const [isPolishing, setIsPolishing] = useState(false);
+
+  // TODO: Paste your new AWS Lambda Function URL here
+  const THESIS_LAMBDA_URL = 'https://coeurnp65lku5cuxhl4jmgslp40ddnrj.lambda-url.ca-central-1.on.aws/';
+
+  // Mock Active Data for initial UI styling (We will wire to S3 later)
+  const activeTheses = [
+    { ticker: 'SITE', entry: 90.93, target: 127.08, current: 95.12, shares: 109, daysLeft: 42, horizon: 90, pnlPct: 4.6, pnlDol: 456.71 },
+    { ticker: 'LUN.TO', entry: 11.02, target: 16.50, current: 10.80, shares: 907, daysLeft: 14, horizon: 30, pnlPct: -2.0, pnlDol: -199.54 }
+  ];
+
+  const handlePolishThesis = async () => {
+    setIsPolishing(true);
+    try {
+      const response = await fetch(`${THESIS_LAMBDA_URL}/polish_thesis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: draftTicker,
+          entry_price: 100.00,
+          target_price: 125.00,
+          horizon: 90,
+          fwd_pe: 15.5,
+          de: 0.5,
+          lumina_score: 75,
+          catalyst_news: "Recent earnings beat.",
+          raw_notes: draftNotes
+        })
+      });
+      const resData = await response.json();
+      setAiThesis(resData.polished_thesis);
+    } catch (err) {
+      console.error("Failed to polish thesis:", err);
+      setAiThesis("Connection to Lambda failed. Check console for CORS or network errors.");
+    }
+    setIsPolishing(false);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
+      
+      {/* HEADER RIBBON */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+        <div>
+          <h2 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-3 drop-shadow-sm">
+            <BrainCircuit className="w-6 h-6 text-purple-400" />
+            Thesis Vault
+          </h2>
+          <p className="text-sm text-slate-400 mt-1">Quantitative Paper Trading & AI Accountability Engine</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-4">
+          <div className="bg-[#111c38]/60 border border-[#1e3a8a]/30 rounded-xl px-4 py-2 text-right">
+            <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Total Invested</p>
+            <p className="text-lg font-mono font-bold text-slate-200">$19,985.00</p>
+          </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-right">
+            <p className="text-xs text-emerald-400/80 uppercase tracking-widest font-bold mb-1">Unrealized P&L</p>
+            <p className="text-lg font-mono font-bold text-emerald-400">+$257.17</p>
+          </div>
+          <button 
+            onClick={() => setIsDrafting(true)}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(126,34,206,0.3)] border border-purple-400/20 flex items-center gap-2">
+            <Target className="w-4 h-4" />
+            Draft New Thesis
+          </button>
+        </div>
+      </div>
+
+      {/* TABS */}
+      <div className="flex gap-6 border-b border-[#2d254f]/50 mb-4">
+        <button 
+          onClick={() => setActiveTab('active')}
+          className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'active' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
+          Active Pipeline
+        </button>
+        <button 
+          onClick={() => setActiveTab('closed')}
+          className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'closed' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
+          Post-Mortem History
+        </button>
+      </div>
+
+      {/* DATA GRID */}
+      <div className="flex-1 overflow-x-auto custom-scrollbar">
+        <table className="w-full text-left text-sm whitespace-nowrap">
+          <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
+            <tr>
+              <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
+              <th className="py-3 px-4 font-bold">Allocated</th>
+              <th className="py-3 px-4 font-bold">Entry / Target</th>
+              <th className="py-3 px-4 font-bold">Time Horizon</th>
+              <th className="py-3 px-4 font-bold text-right">Live P&L</th>
+              <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#2d254f]/30">
+            {activeTheses.map((trade) => (
+              <tr key={trade.ticker} className="hover:bg-[#16122b]/80 transition-colors group">
+                <td className="py-3 px-4">
+                  <span className="font-bold text-lg text-slate-200">{trade.ticker}</span>
+                </td>
+                <td className="py-3 px-4 font-mono text-slate-300">
+                  ${(trade.entry * trade.shares).toLocaleString()} <span className="text-xs text-slate-500">({trade.shares} sh)</span>
+                </td>
+                <td className="py-3 px-4">
+                  <div className="font-mono text-slate-300">${trade.entry.toFixed(2)} → <span className="text-cyan-400">${trade.target.toFixed(2)}</span></div>
+                </td>
+                <td className="py-3 px-4">
+                  <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
+                    <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft/trade.horizon)*100)}%` }}></div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
+                </td>
+                <td className="py-3 px-4 text-right font-mono">
+                  <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
+                  </div>
+                  <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                    {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
+                  </div>
+                </td>
+                <td className="py-3 px-4 text-right">
+                  <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                    Close Trade
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* THESIS MODAL (SLIDE OVER) */}
+      {isDrafting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end">
+          <div className="w-full md:w-[600px] h-full bg-[#0d0b1a] border-l border-[#2d254f]/50 p-6 flex flex-col shadow-2xl animate-slide-up overflow-y-auto custom-scrollbar">
+            
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
+              <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-1.5 rounded-full border border-[#1e3a8a]/50"><X size={18}/></button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Ticker Symbol</label>
+                <input 
+                  type="text" 
+                  value={draftTicker}
+                  onChange={(e) => setDraftTicker(e.target.value.toUpperCase())}
+                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-purple-500 shadow-inner" 
+                  placeholder="e.g. SITE"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Time Horizon</label>
+                <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 shadow-inner appearance-none">
+                  <option value="30">30 Days (Tactical)</option>
+                  <option value="90">90 Days (Quarterly)</option>
+                  <option value="180">180 Days (Half-Year)</option>
+                  <option value="365">365 Days (Structural)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 block">Your Raw Theory (The "Why")</label>
+              <textarea 
+                rows="4" 
+                value={draftNotes}
+                onChange={(e) => setDraftNotes(e.target.value)}
+                className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-slate-200 text-sm focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
+                placeholder="What is the market missing? e.g. Temporary supply chain scare crushed the price, but insiders are buying heavily."
+              ></textarea>
+              <button 
+                onClick={handlePolishThesis}
+                disabled={isPolishing || !draftTicker || !draftNotes}
+                className="mt-3 w-full bg-[#111c38] hover:bg-[#1e3a8a]/80 disabled:opacity-50 text-purple-400 font-bold py-3 rounded-xl flex justify-center items-center gap-2 border border-[#1e3a8a]/50 transition-colors shadow-lg">
+                {isPolishing ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4" />}
+                {isPolishing ? 'Gemini is Reasoning...' : 'Synthesize Institutional Thesis'}
+              </button>
+            </div>
+
+            {aiThesis && (
+              <div className="flex-1 bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-5 mb-6 overflow-y-auto custom-scrollbar shadow-inner relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
+                <h4 className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                  <CheckCircle2 className="w-4 h-4" /> Institutional Polish Complete
+                </h4>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap relative z-10">{aiThesis}</p>
+              </div>
+            )}
+
+            <button 
+              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto ${
+                aiThesis ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] border border-emerald-400/20' : 'bg-[#07050f]/80 text-slate-600 border border-[#2d254f]/50 cursor-not-allowed'
+              }`}
+            >
+              <DollarSign className="w-5 h-5"/>
+              Commit $10,000 Allocation
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3632,7 +3632,7 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-12 md:pt-16 p-4">
           <div className="w-full max-w-3xl max-h-[90vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up overflow-y-auto custom-scrollbar relative">
             
             <div className="flex justify-between items-center mb-6 shrink-0">

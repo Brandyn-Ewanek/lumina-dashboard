@@ -3482,10 +3482,11 @@ function ThesisVault({ data = [] }) {
   const handlePolishThesis = async () => {
     setIsPolishing(true);
     try {
-      const response = await fetch(`${THESIS_LAMBDA_URL}/polish_thesis`, {
+      const response = await fetch(THESIS_LAMBDA_URL, { // <-- Removed /polish_thesis
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
+          action: 'polish', // <-- Added action router
           ticker: draftTicker,
           entry_price: 100.00,
           target_price: 125.00,
@@ -3509,10 +3510,11 @@ function ThesisVault({ data = [] }) {
   const handleCommitBuy = async () => {
     setIsCommitting(true);
     try {
-      const response = await fetch(`${THESIS_LAMBDA_URL}/commit_buy`, {
+      const response = await fetch(THESIS_LAMBDA_URL, { // <-- Removed /commit_buy
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
+          action: 'commit', // <-- Added action router
           ticker: draftTicker,
           entry_price: 100.00, 
           target_price: 125.00,
@@ -3525,8 +3527,8 @@ function ThesisVault({ data = [] }) {
       
       if (response.ok) {
         alert("Thesis successfully locked into AWS S3!");
-        setIsDrafting(false); // Close the slide-out menu
-        setAiThesis('');      // Clear the form
+        setIsDrafting(false); 
+        setAiThesis('');      
         setDraftNotes('');
         setDraftTicker('');
       } else {

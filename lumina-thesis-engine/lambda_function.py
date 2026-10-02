@@ -11,7 +11,6 @@ ACTIVE_THEORIES_KEY = 'data/theories/active.json'
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def lambda_handler(event, context):
-    # 1. YOUR ORIGINAL WORKING HEADERS
     headers = {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
@@ -19,19 +18,18 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Headers": "Content-Type"
     }
 
-    # 2. YOUR ORIGINAL PREFLIGHT INTERCEPT
-    method = event.get('requestContext', {}).get('http', {}).get('method')
-    if method == 'OPTIONS':
+    if event.get('requestContext', {}).get('http', {}).get('method') == 'OPTIONS':
         return {"statusCode": 200, "headers": headers, "body": ""}
-
-    raw_path = event.get('rawPath', '/')
 
     try:
         body_str = event.get('body') or '{}'
         body = json.loads(body_str)
+        
+        # YOUR WORKAROUND: Route based on the JSON body instead of the URL
+        action = body.get('action')
 
-        # ROUTE 1: POLISH THESIS (AI SYNTHESIS)
-        if 'polish_thesis' in raw_path:
+        # ROUTE 1: POLISH THESIS
+        if action == 'polish':
             prompt = f"""
             You are an institutional portfolio manager. Synthesize the user's raw notes into a rigorous, two-paragraph quantitative thesis.
             Inputs:
@@ -56,8 +54,8 @@ def lambda_handler(event, context):
                 "body": json.dumps({"polished_thesis": response.text})
             }
 
-        # ROUTE 2: COMMIT BUY (S3 STATE INGESTION)
-        elif 'commit_buy' in raw_path:
+        # ROUTE 2: COMMIT BUY
+        elif action == 'commit':
             entry_price = float(body.get('entry_price', 1))
             target_budget = 10000
             shares = int(target_budget // entry_price)
@@ -110,7 +108,8 @@ def lambda_handler(event, context):
                 "body": json.dumps({"message": "Buy committed to S3 successfully", "thesis_id": new_theory["thesis_id"]})
             }
 
+        else:
+            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "No valid action provided in JSON body."})}
+
     except Exception as e:
         return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
-
-    return {"statusCode": 404, "headers": headers, "body": json.dumps({"error": f"Route not found: {raw_path}"})}

@@ -11,6 +11,19 @@ ACTIVE_THEORIES_KEY = 'data/theories/active.json'
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def lambda_handler(event, context):
+    # 1. YOUR ORIGINAL WORKING HEADERS
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
+
+    # 2. YOUR ORIGINAL PREFLIGHT INTERCEPT
+    method = event.get('requestContext', {}).get('http', {}).get('method')
+    if method == 'OPTIONS':
+        return {"statusCode": 200, "headers": headers, "body": ""}
+
     raw_path = event.get('rawPath', '/')
 
     try:
@@ -37,9 +50,9 @@ def lambda_handler(event, context):
                 contents=prompt
             )
             
-            # Clean return - NO manual headers here
             return {
                 "statusCode": 200,
+                "headers": headers,
                 "body": json.dumps({"polished_thesis": response.text})
             }
 
@@ -91,13 +104,13 @@ def lambda_handler(event, context):
                 ContentType='application/json'
             )
 
-            # Clean return - NO manual headers here
             return {
                 "statusCode": 200,
+                "headers": headers,
                 "body": json.dumps({"message": "Buy committed to S3 successfully", "thesis_id": new_theory["thesis_id"]})
             }
 
     except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
 
-    return {"statusCode": 404, "body": json.dumps({"error": f"Route not found: {raw_path}"})}
+    return {"statusCode": 404, "headers": headers, "body": json.dumps({"error": f"Route not found: {raw_path}"})}

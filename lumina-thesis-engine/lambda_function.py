@@ -11,13 +11,14 @@ ACTIVE_THEORIES_KEY = 'data/theories/active.json'
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def lambda_handler(event, context):
+    # EXACT MATCH to your working Research Engine CORS headers
     headers = {
-        "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
-        "Access-Control-Allow-Headers": "Content-Type"
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
     }
 
+    # EXACT MATCH to your working Research Engine Pre-flight intercept
     if event.get('requestContext', {}).get('http', {}).get('method') == 'OPTIONS':
         return {"statusCode": 200, "headers": headers, "body": ""}
 
@@ -25,10 +26,9 @@ def lambda_handler(event, context):
         body_str = event.get('body') or '{}'
         body = json.loads(body_str)
         
-        # YOUR WORKAROUND: Route based on the JSON body instead of the URL
+        # Route based on the JSON body payload
         action = body.get('action')
 
-        # ROUTE 1: POLISH THESIS
         if action == 'polish':
             prompt = f"""
             You are an institutional portfolio manager. Synthesize the user's raw notes into a rigorous, two-paragraph quantitative thesis.
@@ -54,7 +54,6 @@ def lambda_handler(event, context):
                 "body": json.dumps({"polished_thesis": response.text})
             }
 
-        # ROUTE 2: COMMIT BUY
         elif action == 'commit':
             entry_price = float(body.get('entry_price', 1))
             target_budget = 10000
@@ -109,7 +108,7 @@ def lambda_handler(event, context):
             }
 
         else:
-            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "No valid action provided in JSON body."})}
+            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "No valid action provided."})}
 
     except Exception as e:
         return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}

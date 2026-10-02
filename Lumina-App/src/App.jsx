@@ -3471,22 +3471,22 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false); // NEW STATE
 
-  const THESIS_LAMBDA_URL = 'https://coeurnp65lku5cuxhl4jmgs1p40ddnrj.lambda-url.ca-central-1.on.aws';
+  const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/ ';
 
   // These are placeholders. In the next step, we will replace this with a fetch from S3!
   const activeTheses = [
-    { ticker: 'SITE', entry: 90.93, target: 127.08, current: 95.12, shares: 109, daysLeft: 42, horizon: 90, pnlPct: 4.6, pnlDol: 456.71 },
-    { ticker: 'LUN.TO', entry: 11.02, target: 16.50, current: 10.80, shares: 907, daysLeft: 14, horizon: 30, pnlPct: -2.0, pnlDol: -199.54 }
-  ];
+    { ticker: 'SITE', entry: 90.93, target: 127.08, current: 95.12, shares: 109, daysLeft: 42, horizon: 90, pnlPct: 4.6, pnlDol: 456.71 }
+  ]; // <-- ADDED THE MISSING CLOSING BRACKET AND SEMICOLON HERE
 
   const handlePolishThesis = async () => {
     setIsPolishing(true);
     try {
-      const response = await fetch(THESIS_LAMBDA_URL, { // <-- Removed /polish_thesis
+      const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        // RESTORED: Back to application/json to match your working Research Engine
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'polish', // <-- Added action router
+          action: 'polish',
           ticker: draftTicker,
           entry_price: 100.00,
           target_price: 125.00,
@@ -3510,11 +3510,12 @@ function ThesisVault({ data = [] }) {
   const handleCommitBuy = async () => {
     setIsCommitting(true);
     try {
-      const response = await fetch(THESIS_LAMBDA_URL, { // <-- Removed /commit_buy
+      const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        // RESTORED: Back to application/json here as well
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'commit', // <-- Added action router
+          action: 'commit',
           ticker: draftTicker,
           entry_price: 100.00, 
           target_price: 125.00,

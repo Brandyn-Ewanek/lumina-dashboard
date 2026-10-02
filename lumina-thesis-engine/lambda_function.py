@@ -11,11 +11,9 @@ ACTIVE_THEORIES_KEY = 'data/theories/active.json'
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 def lambda_handler(event, context):
-    
     raw_path = event.get('rawPath', '/')
 
     try:
-        # Safely parse the body
         body_str = event.get('body') or '{}'
         body = json.loads(body_str)
 
@@ -39,6 +37,7 @@ def lambda_handler(event, context):
                 contents=prompt
             )
             
+            # Clean return - NO manual headers here
             return {
                 "statusCode": 200,
                 "body": json.dumps({"polished_thesis": response.text})
@@ -46,7 +45,7 @@ def lambda_handler(event, context):
 
         # ROUTE 2: COMMIT BUY (S3 STATE INGESTION)
         elif 'commit_buy' in raw_path:
-            entry_price = float(body.get('entry_price', 1)) # Fallback to 1 to prevent division by zero
+            entry_price = float(body.get('entry_price', 1))
             target_budget = 10000
             shares = int(target_budget // entry_price)
             
@@ -77,7 +76,6 @@ def lambda_handler(event, context):
                 "entry_snapshot": body.get('entry_snapshot', {})
             }
 
-            # Try to fetch existing theories, or start a new list if file doesn't exist yet
             try:
                 s3_response = s3.get_object(Bucket=BUCKET_NAME, Key=ACTIVE_THEORIES_KEY)
                 active_theories = json.loads(s3_response['Body'].read().decode('utf-8'))
@@ -93,20 +91,13 @@ def lambda_handler(event, context):
                 ContentType='application/json'
             )
 
+            # Clean return - NO manual headers here
             return {
                 "statusCode": 200,
                 "body": json.dumps({"message": "Buy committed to S3 successfully", "thesis_id": new_theory["thesis_id"]})
             }
 
     except Exception as e:
-        # Catch any AI or JSON errors cleanly (NO headers referenced here)
-        return {
-            "statusCode": 500, 
-            "body": json.dumps({"error": str(e)})
-        }
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 
-    # If the URL path doesn't match 'polish_thesis' or 'commit_buy', return a 404
-    return {
-        "statusCode": 404, 
-        "body": json.dumps({"error": f"Route not found: {raw_path}"})
-    }
+    return {"statusCode": 404, "body": json.dumps({"error": f"Route not found: {raw_path}"})}

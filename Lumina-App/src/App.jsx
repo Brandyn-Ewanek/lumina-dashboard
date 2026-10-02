@@ -3484,7 +3484,7 @@ function ThesisVault({ data = [] }) {
     try {
       const response = await fetch(`${THESIS_LAMBDA_URL}/polish_thesis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           ticker: draftTicker,
           entry_price: 100.00,
@@ -3511,7 +3511,7 @@ function ThesisVault({ data = [] }) {
     try {
       const response = await fetch(`${THESIS_LAMBDA_URL}/commit_buy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           ticker: draftTicker,
           entry_price: 100.00, 

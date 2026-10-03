@@ -3469,32 +3469,83 @@ function ThesisVault({ data = [] }) {
   const [draftNotes, setDraftNotes] = useState('');
   const [aiThesis, setAiThesis] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
-  const [isCommitting, setIsCommitting] = useState(false); // NEW STATE
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [activeTheses, setActiveTheses] = useState([]);
 
-  const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/ ';
+  const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
-  // These are placeholders. In the next step, we will replace this with a fetch from S3!
-  const activeTheses = [
-    { ticker: 'SITE', entry: 90.93, target: 127.08, current: 95.12, shares: 109, daysLeft: 42, horizon: 90, pnlPct: 4.6, pnlDol: 456.71 }
-  ]; // <-- ADDED THE MISSING CLOSING BRACKET AND SEMICOLON HERE
+  // PHASE 1: Fetch live active.json from S3
+  useEffect(() => {
+    const fetchTheses = async () => {
+      try {
+        const res = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/active.json?t=${Date.now()}`);
+        if (res.ok) {
+          const fetchedData = await res.json();
+          setActiveTheses(fetchedData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch active theses from S3", err);
+      }
+    };
+    fetchTheses();
+  }, [isDrafting]); // Refetch automatically when you close the drafting modal
+
+  // PHASE 1: Live P&L Math Engine
+  const liveTheses = useMemo(() => {
+    return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
+      // Find the live market data for this ticker
+      const liveStock = data.find(s => s.t === trade.ticker);
+      const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
+      
+      const invested = trade.allocation.invested_capital;
+      const currentVal = trade.allocation.shares * currentPrice;
+      const pnlDol = currentVal - invested;
+      const pnlPct = invested > 0 ? (pnlDol / invested) * 100 : 0;
+      
+      // Calculate days remaining
+      const targetDate = new Date(trade.timeline.target_date);
+      const today = new Date();
+      const daysLeft = Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
+
+      return {
+        ...trade,
+        currentPrice,
+        pnlDol,
+        pnlPct,
+        daysLeft
+      };
+    });
+  }, [activeTheses, data]);
+
+  // Aggregate totals for the top header widgets
+  const totals = useMemo(() => {
+    return liveTheses.reduce((acc, trade) => {
+      acc.invested += trade.allocation.invested_capital;
+      acc.pnl += trade.pnlDol;
+      return acc;
+    }, { invested: 0, pnl: 0 });
+  }, [liveTheses]);
 
   const handlePolishThesis = async () => {
     setIsPolishing(true);
     try {
+      const draftStockData = data.find(s => s.t === draftTicker) || {};
+      const livePrice = draftStockData.close || 100.00;
+      const liveTarget = draftStockData.target || livePrice * 1.25;
+
       const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
-        // RESTORED: Back to application/json to match your working Research Engine
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'polish',
           ticker: draftTicker,
-          entry_price: 100.00,
-          target_price: 125.00,
+          entry_price: livePrice,
+          target_price: liveTarget,
           horizon: 90,
-          fwd_pe: 15.5,
-          de: 0.5,
-          lumina_score: 75,
-          catalyst_news: "Recent earnings beat.",
+          fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 15.5,
+          de: draftStockData.debtToEquity || 0.5,
+          lumina_score: draftStockData.total_score || 75,
+          catalyst_news: draftStockData.recent_news || "No recent news detected.",
           raw_notes: draftNotes
         })
       });
@@ -3506,23 +3557,35 @@ function ThesisVault({ data = [] }) {
     setIsPolishing(false);
   };
 
-  // NEW: Function to save the thesis to AWS S3
   const handleCommitBuy = async () => {
     setIsCommitting(true);
     try {
+      const draftStockData = data.find(s => s.t === draftTicker) || {};
+      const livePrice = draftStockData.close || 100.00;
+      const liveTarget = draftStockData.target || livePrice * 1.25;
+      
+      const targetDateObj = new Date();
+      targetDateObj.setDate(targetDateObj.getDate() + 90);
+      const targetDateStr = targetDateObj.toISOString().split('T')[0];
+
       const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
-        // RESTORED: Back to application/json here as well
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commit',
           ticker: draftTicker,
-          entry_price: 100.00, 
-          target_price: 125.00,
+          entry_price: livePrice, 
+          target_price: liveTarget,
           horizon_days: 90,
-          target_date: "2027-01-01",
+          target_date: targetDateStr,
           polished_thesis: aiThesis,
-          raw_notes: draftNotes
+          raw_notes: draftNotes,
+          entry_snapshot: {
+            fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 0,
+            de: draftStockData.debtToEquity || 0,
+            lumina_score: draftStockData.total_score || 0,
+            catalyst_news: draftStockData.recent_news || ""
+          }
         })
       });
       
@@ -3557,11 +3620,13 @@ function ThesisVault({ data = [] }) {
         <div className="flex flex-wrap gap-4">
           <div className="bg-[#111c38]/60 border border-[#1e3a8a]/30 rounded-xl px-4 py-2 text-right">
             <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Total Invested</p>
-            <p className="text-lg font-mono font-bold text-slate-200">$19,985.00</p>
+            <p className="text-lg font-mono font-bold text-slate-200">${totals.invested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
           </div>
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-right">
-            <p className="text-xs text-emerald-400/80 uppercase tracking-widest font-bold mb-1">Unrealized P&L</p>
-            <p className="text-lg font-mono font-bold text-emerald-400">+$257.17</p>
+          <div className={`bg-[#111c38]/60 border rounded-xl px-4 py-2 text-right ${totals.pnl >= 0 ? 'border-emerald-500/30' : 'border-rose-500/30'}`}>
+            <p className={`text-xs uppercase tracking-widest font-bold mb-1 ${totals.pnl >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>Unrealized P&L</p>
+            <p className={`text-lg font-mono font-bold ${totals.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {totals.pnl >= 0 ? '+' : ''}${totals.pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </p>
           </div>
           <button 
             onClick={() => setIsDrafting(true)}
@@ -3576,7 +3641,7 @@ function ThesisVault({ data = [] }) {
         <button 
           onClick={() => setActiveTab('active')}
           className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'active' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
-          Active Pipeline
+          Active Pipeline ({liveTheses.length})
         </button>
         <button 
           onClick={() => setActiveTab('closed')}
@@ -3598,38 +3663,46 @@ function ThesisVault({ data = [] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#2d254f]/30">
-            {activeTheses.map((trade) => (
-              <tr key={trade.ticker} className="hover:bg-[#16122b]/80 transition-colors group">
-                <td className="py-3 px-4">
-                  <span className="font-bold text-lg text-slate-200">{trade.ticker}</span>
-                </td>
-                <td className="py-3 px-4 font-mono text-slate-300">
-                  ${(trade.entry * trade.shares).toLocaleString()} <span className="text-xs text-slate-500">({trade.shares} sh)</span>
-                </td>
-                <td className="py-3 px-4">
-                  <div className="font-mono text-slate-300">${trade.entry.toFixed(2)} → <span className="text-cyan-400">${trade.target.toFixed(2)}</span></div>
-                </td>
-                <td className="py-3 px-4">
-                  <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
-                    <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft/trade.horizon)*100)}%` }}></div>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
-                </td>
-                <td className="py-3 px-4 text-right font-mono">
-                  <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
-                  </div>
-                  <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                    {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-right">
-                  <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                    Close Trade
-                  </button>
-                </td>
+            {liveTheses.length === 0 ? (
+              <tr>
+                <td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td>
               </tr>
-            ))}
+            ) : (
+              liveTheses.map((trade) => (
+                <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
+                  <td className="py-3 px-4">
+                    <span className="font-bold text-lg text-slate-200">{trade.ticker}</span>
+                  </td>
+                  <td className="py-3 px-4 font-mono text-slate-300">
+                    ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="font-mono text-slate-300">
+                      ${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
+                      <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft / trade.timeline.days_horizon) * 100)}%` }}></div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono">
+                    <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
+                    </div>
+                    <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                      {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                      Close Trade
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

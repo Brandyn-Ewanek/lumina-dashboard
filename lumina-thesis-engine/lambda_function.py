@@ -57,7 +57,8 @@ def lambda_handler(event, context):
 
         elif action == 'commit':
             entry_price = float(body.get('entry_price', 1))
-            target_budget = 10000
+            # Grab the dynamic budget from React, default to 10000 if missing
+            target_budget = float(body.get('target_budget', 10000)) 
             shares = int(target_budget // entry_price)
             
             new_theory = {

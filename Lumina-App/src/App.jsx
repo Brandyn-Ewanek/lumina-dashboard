@@ -3471,10 +3471,10 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeTheses, setActiveTheses] = useState([]);
+  const [targetBudget, setTargetBudget] = useState(10000); // NEW BUDGET STATE
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
-  // PHASE 1: Fetch live active.json from S3
   useEffect(() => {
     const fetchTheses = async () => {
       try {
@@ -3488,12 +3488,10 @@ function ThesisVault({ data = [] }) {
       }
     };
     fetchTheses();
-  }, [isDrafting]); // Refetch automatically when you close the drafting modal
+  }, [isDrafting]);
 
-  // PHASE 1: Live P&L Math Engine
   const liveTheses = useMemo(() => {
     return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
-      // Find the live market data for this ticker
       const liveStock = data.find(s => s.t === trade.ticker);
       const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
       
@@ -3502,7 +3500,6 @@ function ThesisVault({ data = [] }) {
       const pnlDol = currentVal - invested;
       const pnlPct = invested > 0 ? (pnlDol / invested) * 100 : 0;
       
-      // Calculate days remaining
       const targetDate = new Date(trade.timeline.target_date);
       const today = new Date();
       const daysLeft = Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
@@ -3517,7 +3514,6 @@ function ThesisVault({ data = [] }) {
     });
   }, [activeTheses, data]);
 
-  // Aggregate totals for the top header widgets
   const totals = useMemo(() => {
     return liveTheses.reduce((acc, trade) => {
       acc.invested += trade.allocation.invested_capital;
@@ -3574,6 +3570,7 @@ function ThesisVault({ data = [] }) {
         body: JSON.stringify({
           action: 'commit',
           ticker: draftTicker,
+          target_budget: Number(targetBudget), // SENDING DYNAMIC BUDGET
           entry_price: livePrice, 
           target_price: liveTarget,
           horizon_days: 90,
@@ -3595,6 +3592,7 @@ function ThesisVault({ data = [] }) {
         setAiThesis('');      
         setDraftNotes('');
         setDraftTicker('');
+        setTargetBudget(10000); // RESET ON SUCCESS
       } else {
         alert("AWS rejected the save. Check console.");
       }
@@ -3708,15 +3706,15 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4">
-          <div className="w-full max-w-4xl max-h-[95vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up overflow-y-auto custom-scrollbar relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
             
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
               <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={20}/></button>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 mb-6 shrink-0">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 shrink-0">
               <div>
                 <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Ticker Symbol</label>
                 <input 
@@ -3735,6 +3733,18 @@ function ThesisVault({ data = [] }) {
                   <option value="180">180 Days (Half-Year)</option>
                   <option value="365">365 Days (Structural)</option>
                 </select>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Allocation ($)</label>
+                <input 
+                  type="number" 
+                  value={targetBudget}
+                  onChange={(e) => setTargetBudget(e.target.value)}
+                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 shadow-inner text-lg" 
+                  placeholder="10000"
+                  step="1000"
+                  min="100"
+                />
               </div>
             </div>
 
@@ -3778,7 +3788,7 @@ function ThesisVault({ data = [] }) {
               }`}
             >
               {isCommitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <DollarSign className="w-6 h-6"/>}
-              {isCommitting ? 'Saving to AWS S3...' : 'Commit $10,000 Allocation'}
+              {isCommitting ? 'Saving to AWS S3...' : `Commit $${Number(targetBudget || 0).toLocaleString()} Allocation`}
             </button>
           </div>
         </div>

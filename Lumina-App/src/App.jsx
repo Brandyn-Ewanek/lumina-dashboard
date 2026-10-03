@@ -3708,8 +3708,8 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-12 md:pt-16 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up overflow-y-auto custom-scrollbar relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4">
+          <div className="w-full max-w-4xl max-h-[95vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up overflow-y-auto custom-scrollbar relative">
             
             <div className="flex justify-between items-center mb-6 shrink-0">
               <h3 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
@@ -3741,7 +3741,7 @@ function ThesisVault({ data = [] }) {
             <div className="mb-6 shrink-0">
               <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Your Raw Theory (The "Why")</label>
               <textarea 
-                rows="4" 
+                rows="3" 
                 value={draftNotes}
                 onChange={(e) => setDraftNotes(e.target.value)}
                 className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-4 text-slate-200 text-base focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
@@ -3757,12 +3757,16 @@ function ThesisVault({ data = [] }) {
             </div>
 
             {aiThesis && (
-              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 overflow-y-auto min-h-[200px] custom-scrollbar shadow-inner relative shrink-0">
+              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 shadow-inner relative shrink-0 flex flex-col">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-                <h4 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
-                  <CheckCircle2 className="w-5 h-5" /> Institutional Polish Complete
+                <h4 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider shrink-0">
+                  <CheckCircle2 className="w-5 h-5" /> Institutional Polish Complete (Editable)
                 </h4>
-                <p className="text-base text-slate-200 font-medium leading-relaxed whitespace-pre-wrap relative z-10">{aiThesis}</p>
+                <textarea 
+                  value={aiThesis}
+                  onChange={(e) => setAiThesis(e.target.value)}
+                  className="w-full bg-[#07050f]/60 border border-[#2d254f]/50 rounded-xl p-4 text-slate-200 text-sm leading-relaxed whitespace-pre-wrap relative z-10 focus:outline-none focus:border-purple-500 custom-scrollbar min-h-[200px] resize-y"
+                />
               </div>
             )}
 

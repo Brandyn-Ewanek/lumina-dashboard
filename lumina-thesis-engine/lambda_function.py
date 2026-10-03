@@ -31,7 +31,7 @@ def lambda_handler(event, context):
 
         if action == 'polish':
             prompt = f"""
-            You are an institutional portfolio manager. Synthesize the user's raw notes into a rigorous, two-paragraph quantitative thesis.
+            You are an institutional portfolio manager. Synthesize the user's raw notes into a highly concise, bullet-point quantitative thesis.
             Inputs:
             - Ticker: {body.get('ticker')} | Entry Price: {body.get('entry_price')} | Target: {body.get('target_price')} | Horizon: {body.get('horizon')} days
             - Fundamentals: Fwd P/E {body.get('fwd_pe')}, D/E {body.get('de')}, Lumina Score {body.get('lumina_score')}
@@ -39,8 +39,9 @@ def lambda_handler(event, context):
             - User Raw Input: {body.get('raw_notes')}
 
             Requirements:
-            - Paragraph 1: State the core pricing inefficiency and macro/operational catalyst.
-            - Paragraph 2: Highlight the downside defense and defined target outcome.
+            - Output strictly in concise, punchy bullet points. Do not use filler paragraphs.
+            - Section 1: Core Inefficiency & Catalyst (Max 3 bullets)
+            - Section 2: Downside Defense & Target (Max 3 bullets)
             """
             
             response = client.models.generate_content(

@@ -3471,25 +3471,28 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeTheses, setActiveTheses] = useState([]);
+  const [historyTheses, setHistoryTheses] = useState([]); // NEW STATE: For Phase 3
   const [targetBudget, setTargetBudget] = useState(10000);
   const [notification, setNotification] = useState(null);
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
+  // Fetch both Active and History from S3
   useEffect(() => {
     const fetchTheses = async () => {
       try {
-        const res = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/active.json?t=${Date.now()}`);
-        if (res.ok) {
-          const fetchedData = await res.json();
-          setActiveTheses(fetchedData);
-        }
+        const resActive = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/active.json?t=${Date.now()}`);
+        if (resActive.ok) setActiveTheses(await resActive.json());
+
+        // Fetch the new history file for the Post-Mortem tab
+        const resHistory = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/history.json?t=${Date.now()}`);
+        if (resHistory.ok) setHistoryTheses(await resHistory.json());
       } catch (err) {
-        console.error("Failed to fetch active theses from S3", err);
+        console.error("Failed to fetch theses from S3", err);
       }
     };
     fetchTheses();
-  }, [isDrafting]);
+  }, [isDrafting, activeTab]);
 
   const liveTheses = useMemo(() => {
     return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
@@ -3621,7 +3624,6 @@ function ThesisVault({ data = [] }) {
     setIsCommitting(false);
   };
 
-  // PHASE 2: THE SELL ENGINE
   const handleCloseTrade = async (trade) => {
     const liveStock = data.find(s => s.t === trade.ticker) || {};
     const exitPrice = liveStock.close || trade.currentPrice || trade.allocation.entry_price;
@@ -3649,6 +3651,11 @@ function ThesisVault({ data = [] }) {
 
       if (response.ok) {
          setNotification({ type: 'success', message: `${trade.ticker} successfully closed. Realized P&L locked in.` });
+         
+         // Fetch updated history to populate the Post-Mortem tab instantly
+         const resHistory = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/history.json?t=${Date.now()}`);
+         if (resHistory.ok) setHistoryTheses(await resHistory.json());
+
          setTimeout(() => setNotification(null), 4500);
       } else {
          setNotification({ type: 'error', message: 'AWS failed to close trade. Check logs.' });
@@ -3716,66 +3723,116 @@ function ThesisVault({ data = [] }) {
         <button 
           onClick={() => setActiveTab('closed')}
           className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'closed' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
-          Post-Mortem History
+          Post-Mortem History ({historyTheses.length})
         </button>
       </div>
 
       <div className="flex-1 overflow-x-auto custom-scrollbar">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
-            <tr>
-              <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
-              <th className="py-3 px-4 font-bold">Allocated</th>
-              <th className="py-3 px-4 font-bold">Entry / Target</th>
-              <th className="py-3 px-4 font-bold">Time Horizon</th>
-              <th className="py-3 px-4 font-bold text-right">Live P&L</th>
-              <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#2d254f]/30">
-            {liveTheses.length === 0 ? (
-              <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
-            ) : (
-              liveTheses.map((trade) => (
-                <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
-                  <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
-                  <td className="py-3 px-4 font-mono text-slate-300">
-                    ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
-                      <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft / trade.timeline.days_horizon) * 100)}%` }}></div>
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono">
-                    <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
-                    </div>
-                    <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                      {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button 
-                      onClick={() => handleCloseTrade(trade)}
-                      className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                      Close Trade
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {activeTab === 'active' ? (
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
+                <th className="py-3 px-4 font-bold">Allocated</th>
+                <th className="py-3 px-4 font-bold">Entry / Target</th>
+                <th className="py-3 px-4 font-bold">Time Horizon</th>
+                <th className="py-3 px-4 font-bold text-right">Live P&L</th>
+                <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#2d254f]/30">
+              {liveTheses.length === 0 ? (
+                <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
+              ) : (
+                liveTheses.map((trade) => (
+                  <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
+                    <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
+                    <td className="py-3 px-4 font-mono text-slate-300">
+                      ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
+                        <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft / trade.timeline.days_horizon) * 100)}%` }}></div>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono">
+                      <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
+                      </div>
+                      <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                        {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button 
+                        onClick={() => handleCloseTrade(trade)}
+                        className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                        Close Trade
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
+                <th className="py-3 px-4 font-bold">Invested</th>
+                <th className="py-3 px-4 font-bold">Entry / Exit Price</th>
+                <th className="py-3 px-4 font-bold">Duration</th>
+                <th className="py-3 px-4 font-bold text-right">Realized P&L</th>
+                <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#2d254f]/30">
+              {historyTheses.length === 0 ? (
+                <tr><td colSpan="6" className="py-8 text-center text-slate-500">No closed trades found in Post-Mortem history.</td></tr>
+              ) : (
+                historyTheses.map((trade) => {
+                  const pnl = trade.allocation.realized_pnl_dollars || 0;
+                  const pnlPct = (pnl / trade.allocation.invested_capital) * 100;
+                  const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
+
+                  return (
+                    <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors">
+                      <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
+                      <td className="py-3 px-4 font-mono text-slate-300">${trade.allocation.invested_capital.toLocaleString()}</td>
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-white">${(trade.allocation.exit_price || 0).toFixed(2)}</span></div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-300">{heldDays} Days</td>
+                      <td className="py-3 px-4 text-right font-mono">
+                        <div className={`font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                          {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                          Run Examiner
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
-          <div className="w-full max-w-3xl h-[88vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.2)] animate-slide-up relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400 w-6 h-6"/> New Thesis Allocation</h3>
               <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={18}/></button>

@@ -3463,7 +3463,7 @@ function LuminaMatrix({ data, insiderData, savedStocks, toggleSaved, watchList, 
 // ==========================================
 // THESIS VAULT (PAPER TRADING ENGINE)
 // ==========================================
-function ThesisVault({ data = [] }) {
+function ThesisVault({ data = [], insiderData = [] }) {
   const [activeTab, setActiveTab] = useState('active');
   const [isDrafting, setIsDrafting] = useState(false);
   const [draftTicker, setDraftTicker] = useState('');
@@ -3481,6 +3481,39 @@ function ThesisVault({ data = [] }) {
   const [isExamining, setIsExamining] = useState(false);
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
+
+  // 4-VECTOR LUMINA SCORE ENGINE (Aligned with LuminaMatrix)
+  const calculateLuminaScore = (ticker) => {
+    const stock = data.find(s => s.t === ticker);
+    if (!stock) return 0;
+    const rec = stock.latestRecord || {};
+    const insiderEntry = (insiderData || []).find(item => item.ticker === ticker);
+
+    const v1 = Number(rec.temporary_scare_score ?? 0);
+    const v2 = Number(rec.margin_of_safety_score ?? 0);
+    const v3 = Number(insiderEntry?.vector_3_score ?? 0);
+    const v4 = Number(rec.vector_4_score ?? 0);
+    const total = Math.min(100, Math.round((v1 + v2 + v3 + v4) * 10) / 10);
+
+    if (total > 0) return total;
+    return Number(rec.total_score || rec.score || stock.total_score || 0);
+  };
+
+  const getSnapshotMetrics = (ticker) => {
+    const stock = data.find(s => s.t === ticker) || {};
+    const rec = stock.latestRecord || {};
+    const score = calculateLuminaScore(ticker);
+    const rawDE = Number(rec.debtToEquity ?? stock.debtToEquity ?? 0);
+    const deFormatted = rawDE > 0 ? Number((rawDE > 5 ? rawDE / 100 : rawDE).toFixed(2)) : 0;
+    const fwdPE = Number(rec.forwardPE || rec.Trailing_PE || stock.peRatio || 0);
+
+    return {
+      fwd_pe: fwdPE > 0 ? Number(fwdPE.toFixed(1)) : 0,
+      de: deFormatted,
+      lumina_score: score,
+      catalyst_news: rec.recent_news || "No recent news detected."
+    };
+  };
 
   useEffect(() => {
     const fetchTheses = async () => {
@@ -3501,10 +3534,12 @@ function ThesisVault({ data = [] }) {
     return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
       const liveStock = data.find(s => s.t === trade.ticker);
       const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
+      const liveScore = calculateLuminaScore(trade.ticker);
       
-      // FIXED: Digging into latestRecord to find the score
-      const liveScore = liveStock ? (liveStock.total_score || liveStock.latestRecord?.total_score || liveStock.latestRecord?.Total_Score || liveStock.latestRecord?.score || 0) : (trade.entry_snapshot?.lumina_score || 0);
-      
+      // Fallback for prior trades saved with 0
+      const savedEntryScore = trade.entry_snapshot?.lumina_score;
+      const entryScore = (savedEntryScore && savedEntryScore > 0) ? savedEntryScore : liveScore;
+
       const invested = trade.allocation.invested_capital;
       const currentVal = trade.allocation.shares * currentPrice;
       const pnlDol = currentVal - invested;
@@ -3514,9 +3549,9 @@ function ThesisVault({ data = [] }) {
       const today = new Date();
       const daysLeft = Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
 
-      return { ...trade, currentPrice, pnlDol, pnlPct, daysLeft, liveScore };
+      return { ...trade, currentPrice, pnlDol, pnlPct, daysLeft, liveScore, entryScore };
     });
-  }, [activeTheses, data]);
+  }, [activeTheses, data, insiderData]);
 
   const totals = useMemo(() => {
     return liveTheses.reduce((acc, trade) => {
@@ -3532,6 +3567,7 @@ function ThesisVault({ data = [] }) {
       const draftStockData = data.find(s => s.t === draftTicker) || {};
       const livePrice = draftStockData.close || 100.00;
       const liveTarget = draftStockData.target || livePrice * 1.25;
+      const metrics = getSnapshotMetrics(draftTicker);
 
       const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
@@ -3542,10 +3578,10 @@ function ThesisVault({ data = [] }) {
           entry_price: livePrice,
           target_price: liveTarget,
           horizon: 90,
-          fwd_pe: draftStockData.peRatio || draftStockData.latestRecord?.peRatio || draftStockData.forwardPE || 15.5,
-          de: draftStockData.debtToEquity || draftStockData.latestRecord?.debtToEquity || draftStockData.latestRecord?.DE_Ratio || 0.5,
-          lumina_score: draftStockData.total_score || draftStockData.latestRecord?.total_score || draftStockData.latestRecord?.Total_Score || 75,
-          catalyst_news: draftStockData.recent_news || draftStockData.latestRecord?.recent_news || "No recent news detected.",
+          fwd_pe: metrics.fwd_pe || 15.5,
+          de: metrics.de || 0.5,
+          lumina_score: metrics.lumina_score || 75,
+          catalyst_news: metrics.catalyst_news,
           raw_notes: draftNotes
         })
       });
@@ -3563,6 +3599,7 @@ function ThesisVault({ data = [] }) {
       const draftStockData = data.find(s => s.t === draftTicker) || {};
       const livePrice = draftStockData.close || 100.00;
       const liveTarget = draftStockData.target || livePrice * 1.25;
+      const metrics = getSnapshotMetrics(draftTicker);
       
       const targetDateObj = new Date();
       targetDateObj.setDate(targetDateObj.getDate() + 90);
@@ -3584,12 +3621,7 @@ function ThesisVault({ data = [] }) {
           target_date: targetDateStr,
           polished_thesis: aiThesis,
           raw_notes: draftNotes,
-          entry_snapshot: {
-            fwd_pe: draftStockData.peRatio || draftStockData.latestRecord?.peRatio || draftStockData.forwardPE || 0,
-            de: draftStockData.debtToEquity || draftStockData.latestRecord?.debtToEquity || draftStockData.latestRecord?.DE_Ratio || 0,
-            lumina_score: draftStockData.total_score || draftStockData.latestRecord?.total_score || draftStockData.latestRecord?.Total_Score || 0,
-            catalyst_news: draftStockData.recent_news || draftStockData.latestRecord?.recent_news || ""
-          }
+          entry_snapshot: metrics
         })
       });
       
@@ -3607,12 +3639,7 @@ function ThesisVault({ data = [] }) {
           timeline: { entry_date: new Date().toISOString().split('T')[0], target_date: targetDateStr, days_horizon: 90 },
           targets: { target_price: liveTarget },
           thesis_narrative: { user_raw_notes: draftNotes, gemini_institutional_thesis: aiThesis },
-          entry_snapshot: {
-            fwd_pe: draftStockData.peRatio || draftStockData.latestRecord?.peRatio || draftStockData.forwardPE || 0,
-            de: draftStockData.debtToEquity || draftStockData.latestRecord?.debtToEquity || draftStockData.latestRecord?.DE_Ratio || 0,
-            lumina_score: draftStockData.total_score || draftStockData.latestRecord?.total_score || draftStockData.latestRecord?.Total_Score || 0,
-            catalyst_news: draftStockData.recent_news || draftStockData.latestRecord?.recent_news || ""
-          }
+          entry_snapshot: metrics
         };
 
         setActiveTheses(prev => [optimisticTrade, ...prev.filter(t => t.thesis_id !== optimisticTrade.thesis_id)]);
@@ -3639,6 +3666,7 @@ function ThesisVault({ data = [] }) {
   const handleCloseTrade = async (trade) => {
     const liveStock = data.find(s => s.t === trade.ticker) || {};
     const exitPrice = liveStock.close || trade.currentPrice || trade.allocation.entry_price;
+    const exitMetrics = getSnapshotMetrics(trade.ticker);
 
     setActiveTheses(prev => prev.filter(t => t.thesis_id !== trade.thesis_id));
     setNotification({ type: 'success', message: `Closing ${trade.ticker} and transferring to Post-Mortem history...` });
@@ -3651,12 +3679,7 @@ function ThesisVault({ data = [] }) {
           action: 'close_trade',
           thesis_id: trade.thesis_id,
           exit_price: exitPrice,
-          exit_snapshot: {
-            fwd_pe: liveStock.peRatio || liveStock.latestRecord?.peRatio || liveStock.forwardPE || 0,
-            de: liveStock.debtToEquity || liveStock.latestRecord?.debtToEquity || liveStock.latestRecord?.DE_Ratio || 0,
-            lumina_score: liveStock.total_score || liveStock.latestRecord?.total_score || liveStock.latestRecord?.Total_Score || 0,
-            catalyst_news: liveStock.recent_news || liveStock.latestRecord?.recent_news || ""
-          }
+          exit_snapshot: exitMetrics
         })
       });
 
@@ -3812,7 +3835,7 @@ function ThesisVault({ data = [] }) {
                       </td>
                       <td className="py-3 px-4 font-mono">
                         <div className="text-slate-400">
-                          {trade.entry_snapshot?.lumina_score || 0} → <span className={trade.liveScore >= (trade.entry_snapshot?.lumina_score || 0) ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{trade.liveScore}</span>
+                          {trade.entryScore} → <span className={trade.liveScore >= trade.entryScore ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{trade.liveScore}</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -3863,8 +3886,9 @@ function ThesisVault({ data = [] }) {
                     const pnlPct = (pnl / trade.allocation.invested_capital) * 100;
                     const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
                     
-                    const entryScore = trade.entry_snapshot?.lumina_score || 0;
-                    const exitScore = trade.exit_snapshot?.lumina_score || 0;
+                    const liveScore = calculateLuminaScore(trade.ticker);
+                    const entryScore = trade.entry_snapshot?.lumina_score > 0 ? trade.entry_snapshot.lumina_score : liveScore;
+                    const exitScore = trade.exit_snapshot?.lumina_score > 0 ? trade.exit_snapshot.lumina_score : liveScore;
 
                     return (
                       <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors">
@@ -3975,7 +3999,7 @@ function ThesisVault({ data = [] }) {
                 <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
                   <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Entry Snapshot</h4>
                   <div className="space-y-1 font-mono text-sm">
-                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-white">{examiningTrade.entry_snapshot?.lumina_score || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-white">{examiningTrade.entry_snapshot?.lumina_score || calculateLuminaScore(examiningTrade.ticker)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-400">Fwd P/E:</span> <span className="text-white">{examiningTrade.entry_snapshot?.fwd_pe || 0}</span></div>
                     <div className="flex justify-between"><span className="text-slate-400">D/E Ratio:</span> <span className="text-white">{examiningTrade.entry_snapshot?.de || 0}</span></div>
                   </div>
@@ -3983,7 +4007,7 @@ function ThesisVault({ data = [] }) {
                 <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
                   <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Exit Snapshot</h4>
                   <div className="space-y-1 font-mono text-sm">
-                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.lumina_score || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.lumina_score || calculateLuminaScore(examiningTrade.ticker)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-400">Fwd P/E:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.fwd_pe || 0}</span></div>
                     <div className="flex justify-between"><span className="text-slate-400">D/E Ratio:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.de || 0}</span></div>
                   </div>

@@ -3698,168 +3698,171 @@ function ThesisVault({ data = [] }) {
     }
   };
 
+  // NEW: Wrapped in a Fragment <> so modals render outside the constrained card
   return (
-    <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
-      
-      {notification && (
-        <div className={`mb-4 px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-between animate-slide-up shadow-lg ${
-          notification.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
-            : 'bg-rose-500/10 border-rose-500/40 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
-        }`}>
-          <div className="flex items-center gap-2.5 text-sm font-medium">
-            {notification.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-400" /> : <AlertTriangle size={18} className="text-rose-400" />}
-            <span>{notification.message}</span>
-          </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white transition-colors p-1"><X size={15} /></button>
-        </div>
-      )}
-
-      <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
-        <div>
-          <h2 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-3 drop-shadow-sm">
-            <BrainCircuit className="w-6 h-6 text-purple-400" />
-            Thesis Vault
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">Quantitative Paper Trading & AI Accountability Engine</p>
-        </div>
+    <>
+      <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
         
-        <div className="flex flex-wrap gap-4">
-          <div className="bg-[#111c38]/60 border border-[#1e3a8a]/30 rounded-xl px-4 py-2 text-right">
-            <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Total Invested</p>
-            <p className="text-lg font-mono font-bold text-slate-200">${totals.invested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+        {notification && (
+          <div className={`mb-4 px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-between animate-slide-up shadow-lg ${
+            notification.type === 'success' 
+              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+              : 'bg-rose-500/10 border-rose-500/40 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+          }`}>
+            <div className="flex items-center gap-2.5 text-sm font-medium">
+              {notification.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-400" /> : <AlertTriangle size={18} className="text-rose-400" />}
+              <span>{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white transition-colors p-1"><X size={15} /></button>
           </div>
-          <div className={`bg-[#111c38]/60 border rounded-xl px-4 py-2 text-right ${totals.pnl >= 0 ? 'border-emerald-500/30' : 'border-rose-500/30'}`}>
-            <p className={`text-xs uppercase tracking-widest font-bold mb-1 ${totals.pnl >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>Unrealized P&L</p>
-            <p className={`text-lg font-mono font-bold ${totals.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {totals.pnl >= 0 ? '+' : ''}${totals.pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-            </p>
+        )}
+
+        <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-3 drop-shadow-sm">
+              <BrainCircuit className="w-6 h-6 text-purple-400" />
+              Thesis Vault
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">Quantitative Paper Trading & AI Accountability Engine</p>
           </div>
+          
+          <div className="flex flex-wrap gap-4">
+            <div className="bg-[#111c38]/60 border border-[#1e3a8a]/30 rounded-xl px-4 py-2 text-right">
+              <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Total Invested</p>
+              <p className="text-lg font-mono font-bold text-slate-200">${totals.invested.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+            </div>
+            <div className={`bg-[#111c38]/60 border rounded-xl px-4 py-2 text-right ${totals.pnl >= 0 ? 'border-emerald-500/30' : 'border-rose-500/30'}`}>
+              <p className={`text-xs uppercase tracking-widest font-bold mb-1 ${totals.pnl >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>Unrealized P&L</p>
+              <p className={`text-lg font-mono font-bold ${totals.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {totals.pnl >= 0 ? '+' : ''}${totals.pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+              </p>
+            </div>
+            <button 
+              onClick={() => setIsDrafting(true)}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(126,34,206,0.3)] border border-purple-400/20 flex items-center gap-2">
+              <Target className="w-4 h-4" />
+              Draft New Thesis
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-6 border-b border-[#2d254f]/50 mb-4">
           <button 
-            onClick={() => setIsDrafting(true)}
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(126,34,206,0.3)] border border-purple-400/20 flex items-center gap-2">
-            <Target className="w-4 h-4" />
-            Draft New Thesis
+            onClick={() => setActiveTab('active')}
+            className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'active' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
+            Active Pipeline ({liveTheses.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('closed')}
+            className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'closed' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
+            Post-Mortem History ({historyTheses.length})
           </button>
         </div>
-      </div>
 
-      <div className="flex gap-6 border-b border-[#2d254f]/50 mb-4">
-        <button 
-          onClick={() => setActiveTab('active')}
-          className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'active' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
-          Active Pipeline ({liveTheses.length})
-        </button>
-        <button 
-          onClick={() => setActiveTab('closed')}
-          className={`pb-3 text-sm font-bold tracking-wider uppercase transition-colors ${activeTab === 'closed' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-500 hover:text-slate-300'}`}>
-          Post-Mortem History ({historyTheses.length})
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-x-auto custom-scrollbar">
-        {activeTab === 'active' ? (
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
-                <th className="py-3 px-4 font-bold">Allocated</th>
-                <th className="py-3 px-4 font-bold">Entry / Target</th>
-                <th className="py-3 px-4 font-bold">Time Horizon</th>
-                <th className="py-3 px-4 font-bold text-right">Live P&L</th>
-                <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#2d254f]/30">
-              {liveTheses.length === 0 ? (
-                <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
-              ) : (
-                liveTheses.map((trade) => (
-                  <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
-                    <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
-                    <td className="py-3 px-4 font-mono text-slate-300">
-                      ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
-                        <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft / trade.timeline.days_horizon) * 100)}%` }}></div>
-                      </div>
-                      <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono">
-                      <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
-                      </div>
-                      <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                        {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button 
-                        onClick={() => handleCloseTrade(trade)}
-                        className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                        Close Trade
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        ) : (
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
-                <th className="py-3 px-4 font-bold">Invested</th>
-                <th className="py-3 px-4 font-bold">Entry / Exit Price</th>
-                <th className="py-3 px-4 font-bold">Duration</th>
-                <th className="py-3 px-4 font-bold text-right">Realized P&L</th>
-                <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#2d254f]/30">
-              {historyTheses.length === 0 ? (
-                <tr><td colSpan="6" className="py-8 text-center text-slate-500">No closed trades found in Post-Mortem history.</td></tr>
-              ) : (
-                historyTheses.map((trade) => {
-                  const pnl = trade.allocation.realized_pnl_dollars || 0;
-                  const pnlPct = (pnl / trade.allocation.invested_capital) * 100;
-                  const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
-
-                  return (
-                    <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors">
+        <div className="flex-1 overflow-x-auto custom-scrollbar">
+          {activeTab === 'active' ? (
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
+                  <th className="py-3 px-4 font-bold">Allocated</th>
+                  <th className="py-3 px-4 font-bold">Entry / Target</th>
+                  <th className="py-3 px-4 font-bold">Time Horizon</th>
+                  <th className="py-3 px-4 font-bold text-right">Live P&L</th>
+                  <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#2d254f]/30">
+                {liveTheses.length === 0 ? (
+                  <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
+                ) : (
+                  liveTheses.map((trade) => (
+                    <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
                       <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
-                      <td className="py-3 px-4 font-mono text-slate-300">${trade.allocation.invested_capital.toLocaleString()}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-white">${(trade.allocation.exit_price || 0).toFixed(2)}</span></div>
+                      <td className="py-3 px-4 font-mono text-slate-300">
+                        ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
                       </td>
-                      <td className="py-3 px-4 text-slate-300">{heldDays} Days</td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        <div className={`font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
+                          <div className="bg-purple-500 h-full rounded-full" style={{ width: `${100 - ((trade.daysLeft / trade.timeline.days_horizon) * 100)}%` }}></div>
                         </div>
-                        <div className={`text-xs ${pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
-                          {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                        <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">{trade.daysLeft} days remaining</div>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono">
+                        <div className={`font-bold ${trade.pnlDol >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {trade.pnlDol >= 0 ? '+' : ''}${trade.pnlDol.toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${trade.pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                          {trade.pnlPct >= 0 ? '+' : ''}{trade.pnlPct.toFixed(2)}%
                         </div>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button 
-                          onClick={() => handleRunExaminer(trade)}
-                          className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                          Run Examiner
+                          onClick={() => handleCloseTrade(trade)}
+                          className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                          Close Trade
                         </button>
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-[#111c38]/80 border-b border-[#2d254f]/50 text-slate-400 uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
+                  <th className="py-3 px-4 font-bold">Invested</th>
+                  <th className="py-3 px-4 font-bold">Entry / Exit Price</th>
+                  <th className="py-3 px-4 font-bold">Duration</th>
+                  <th className="py-3 px-4 font-bold text-right">Realized P&L</th>
+                  <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#2d254f]/30">
+                {historyTheses.length === 0 ? (
+                  <tr><td colSpan="6" className="py-8 text-center text-slate-500">No closed trades found in Post-Mortem history.</td></tr>
+                ) : (
+                  historyTheses.map((trade) => {
+                    const pnl = trade.allocation.realized_pnl_dollars || 0;
+                    const pnlPct = (pnl / trade.allocation.invested_capital) * 100;
+                    const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
+
+                    return (
+                      <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors">
+                        <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
+                        <td className="py-3 px-4 font-mono text-slate-300">${trade.allocation.invested_capital.toLocaleString()}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-white">${(trade.allocation.exit_price || 0).toFixed(2)}</span></div>
+                        </td>
+                        <td className="py-3 px-4 text-slate-300">{heldDays} Days</td>
+                        <td className="py-3 px-4 text-right font-mono">
+                          <div className={`font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+                          </div>
+                          <div className={`text-xs ${pnlPct >= 0 ? 'text-emerald-500/70' : 'text-rose-500/70'}`}>
+                            {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button 
+                            onClick={() => handleRunExaminer(trade)}
+                            className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                            Run Examiner
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       {/* DRAFTING MODAL */}
@@ -3953,6 +3956,6 @@ function ThesisVault({ data = [] }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

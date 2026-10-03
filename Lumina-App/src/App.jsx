@@ -3501,7 +3501,9 @@ function ThesisVault({ data = [] }) {
     return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
       const liveStock = data.find(s => s.t === trade.ticker);
       const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
-      const liveScore = liveStock ? (liveStock.total_score || 0) : (trade.entry_snapshot?.lumina_score || 0);
+      
+      // EXPANDED: Checks all common score keys from the pipeline data
+      const liveScore = liveStock ? (liveStock.total_score || liveStock.lumina_score || liveStock.score || liveStock.totalScore || 0) : (trade.entry_snapshot?.lumina_score || 0);
       
       const invested = trade.allocation.invested_capital;
       const currentVal = trade.allocation.shares * currentPrice;
@@ -3542,7 +3544,8 @@ function ThesisVault({ data = [] }) {
           horizon: 90,
           fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 15.5,
           de: draftStockData.debtToEquity || 0.5,
-          lumina_score: draftStockData.total_score || 75,
+          // EXPANDED FALLBACK
+          lumina_score: draftStockData.total_score || draftStockData.lumina_score || draftStockData.score || draftStockData.totalScore || 75,
           catalyst_news: draftStockData.recent_news || "No recent news detected.",
           raw_notes: draftNotes
         })
@@ -3585,7 +3588,8 @@ function ThesisVault({ data = [] }) {
           entry_snapshot: {
             fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 0,
             de: draftStockData.debtToEquity || 0,
-            lumina_score: draftStockData.total_score || 0,
+            // EXPANDED FALLBACK
+            lumina_score: draftStockData.total_score || draftStockData.lumina_score || draftStockData.score || draftStockData.totalScore || 0,
             catalyst_news: draftStockData.recent_news || ""
           }
         })
@@ -3608,7 +3612,7 @@ function ThesisVault({ data = [] }) {
           entry_snapshot: {
             fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 0,
             de: draftStockData.debtToEquity || 0,
-            lumina_score: draftStockData.total_score || 0,
+            lumina_score: draftStockData.total_score || draftStockData.lumina_score || draftStockData.score || draftStockData.totalScore || 0,
             catalyst_news: draftStockData.recent_news || ""
           }
         };
@@ -3652,7 +3656,8 @@ function ThesisVault({ data = [] }) {
           exit_snapshot: {
             fwd_pe: liveStock.forwardPE || liveStock.peRatio || 0,
             de: liveStock.debtToEquity || 0,
-            lumina_score: liveStock.total_score || 0,
+            // EXPANDED FALLBACK
+            lumina_score: liveStock.total_score || liveStock.lumina_score || liveStock.score || liveStock.totalScore || 0,
             catalyst_news: liveStock.recent_news || ""
           }
         })

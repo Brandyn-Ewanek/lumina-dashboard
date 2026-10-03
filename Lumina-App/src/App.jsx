@@ -3471,7 +3471,8 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeTheses, setActiveTheses] = useState([]);
-  const [targetBudget, setTargetBudget] = useState(10000); // NEW BUDGET STATE
+  const [targetBudget, setTargetBudget] = useState(10000);
+  const [notification, setNotification] = useState(null);
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
@@ -3504,13 +3505,7 @@ function ThesisVault({ data = [] }) {
       const today = new Date();
       const daysLeft = Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
 
-      return {
-        ...trade,
-        currentPrice,
-        pnlDol,
-        pnlPct,
-        daysLeft
-      };
+      return { ...trade, currentPrice, pnlDol, pnlPct, daysLeft };
     });
   }, [activeTheses, data]);
 
@@ -3564,13 +3559,16 @@ function ThesisVault({ data = [] }) {
       targetDateObj.setDate(targetDateObj.getDate() + 90);
       const targetDateStr = targetDateObj.toISOString().split('T')[0];
 
+      const budgetVal = Number(targetBudget) || 10000;
+      const sharesCount = Math.floor(budgetVal / livePrice);
+
       const response = await fetch(THESIS_LAMBDA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commit',
           ticker: draftTicker,
-          target_budget: Number(targetBudget), // SENDING DYNAMIC BUDGET
+          target_budget: budgetVal,
           entry_price: livePrice, 
           target_price: liveTarget,
           horizon_days: 90,
@@ -3587,25 +3585,99 @@ function ThesisVault({ data = [] }) {
       });
       
       if (response.ok) {
-        alert("Thesis successfully locked into AWS S3!");
+        const optimisticTrade = {
+          thesis_id: `thm_${draftTicker.toLowerCase()}_${Date.now()}`,
+          ticker: draftTicker,
+          status: 'OPEN',
+          allocation: {
+            target_budget: budgetVal,
+            shares: sharesCount,
+            entry_price: livePrice,
+            invested_capital: Math.round(sharesCount * livePrice * 100) / 100
+          },
+          timeline: { entry_date: new Date().toISOString().split('T')[0], target_date: targetDateStr, days_horizon: 90 },
+          targets: { target_price: liveTarget },
+          thesis_narrative: { user_raw_notes: draftNotes, gemini_institutional_thesis: aiThesis }
+        };
+
+        setActiveTheses(prev => [optimisticTrade, ...prev.filter(t => t.thesis_id !== optimisticTrade.thesis_id)]);
         setIsDrafting(false); 
         setAiThesis('');      
         setDraftNotes('');
         setDraftTicker('');
-        setTargetBudget(10000); // RESET ON SUCCESS
+        setTargetBudget(10000);
+
+        setNotification({ type: 'success', message: `${draftTicker} allocation ($${budgetVal.toLocaleString()}) locked into Vault.` });
+        setTimeout(() => setNotification(null), 4500);
       } else {
-        alert("AWS rejected the save. Check console.");
+        setNotification({ type: 'error', message: 'AWS rejected the save. Check CloudWatch logs.' });
+        setTimeout(() => setNotification(null), 5000);
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to reach AWS S3.");
+      setNotification({ type: 'error', message: 'Network error: Failed to reach AWS S3.' });
+      setTimeout(() => setNotification(null), 5000);
     }
     setIsCommitting(false);
+  };
+
+  // PHASE 2: THE SELL ENGINE
+  const handleCloseTrade = async (trade) => {
+    const liveStock = data.find(s => s.t === trade.ticker) || {};
+    const exitPrice = liveStock.close || trade.currentPrice || trade.allocation.entry_price;
+
+    // Optimistically remove it from the UI so it feels instantaneous
+    setActiveTheses(prev => prev.filter(t => t.thesis_id !== trade.thesis_id));
+    setNotification({ type: 'success', message: `Closing ${trade.ticker} and transferring to Post-Mortem history...` });
+
+    try {
+      const response = await fetch(THESIS_LAMBDA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'close_trade',
+          thesis_id: trade.thesis_id,
+          exit_price: exitPrice,
+          exit_snapshot: {
+            fwd_pe: liveStock.forwardPE || liveStock.peRatio || 0,
+            de: liveStock.debtToEquity || 0,
+            lumina_score: liveStock.total_score || 0,
+            catalyst_news: liveStock.recent_news || ""
+          }
+        })
+      });
+
+      if (response.ok) {
+         setNotification({ type: 'success', message: `${trade.ticker} successfully closed. Realized P&L locked in.` });
+         setTimeout(() => setNotification(null), 4500);
+      } else {
+         setNotification({ type: 'error', message: 'AWS failed to close trade. Check logs.' });
+         setTimeout(() => setNotification(null), 5000);
+      }
+    } catch (err) {
+      console.error(err);
+      setNotification({ type: 'error', message: 'Network error closing trade.' });
+      setTimeout(() => setNotification(null), 5000);
+    }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
       
+      {notification && (
+        <div className={`mb-4 px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-between animate-slide-up shadow-lg ${
+          notification.type === 'success' 
+            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+            : 'bg-rose-500/10 border-rose-500/40 text-rose-300 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+        }`}>
+          <div className="flex items-center gap-2.5 text-sm font-medium">
+            {notification.type === 'success' ? <CheckCircle2 size={18} className="text-emerald-400" /> : <AlertTriangle size={18} className="text-rose-400" />}
+            <span>{notification.message}</span>
+          </div>
+          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white transition-colors p-1"><X size={15} /></button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-3 drop-shadow-sm">
@@ -3662,22 +3734,16 @@ function ThesisVault({ data = [] }) {
           </thead>
           <tbody className="divide-y divide-[#2d254f]/30">
             {liveTheses.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td>
-              </tr>
+              <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
             ) : (
               liveTheses.map((trade) => (
                 <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
-                  <td className="py-3 px-4">
-                    <span className="font-bold text-lg text-slate-200">{trade.ticker}</span>
-                  </td>
+                  <td className="py-3 px-4"><span className="font-bold text-lg text-slate-200">{trade.ticker}</span></td>
                   <td className="py-3 px-4 font-mono text-slate-300">
                     ${trade.allocation.invested_capital.toLocaleString()} <span className="text-xs text-slate-500">({trade.allocation.shares} sh)</span>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="font-mono text-slate-300">
-                      ${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span>
-                    </div>
+                    <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
                   </td>
                   <td className="py-3 px-4">
                     <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
@@ -3694,7 +3760,9 @@ function ThesisVault({ data = [] }) {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                    <button 
+                      onClick={() => handleCloseTrade(trade)}
+                      className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#1e3a8a]/50 hover:border-rose-500/50 px-3 py-1.5 rounded-lg transition-colors">
                       Close Trade
                     </button>
                   </td>
@@ -3706,90 +3774,53 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
-          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
-            
-            <div className="flex justify-between items-center mb-6 shrink-0">
-              <h3 className="text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400"/> New Thesis Allocation</h3>
-              <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={20}/></button>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
+          <div className="w-full max-w-3xl h-[88vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.2)] animate-slide-up relative">
+            <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
+              <h3 className="text-xl md:text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400 w-6 h-6"/> New Thesis Allocation</h3>
+              <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={18}/></button>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 shrink-0">
-              <div>
-                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Ticker Symbol</label>
-                <input 
-                  type="text" 
-                  value={draftTicker}
-                  onChange={(e) => setDraftTicker(e.target.value.toUpperCase())}
-                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-white font-mono focus:outline-none focus:border-purple-500 shadow-inner text-lg" 
-                  placeholder="e.g. SITE"
-                />
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">Ticker Symbol</label>
+                  <input type="text" value={draftTicker} onChange={(e) => setDraftTicker(e.target.value.toUpperCase())} className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-purple-500 text-base" placeholder="e.g. SITE" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">Time Horizon</label>
+                  <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none text-sm">
+                    <option value="30">30 Days (Tactical)</option><option value="90">90 Days (Quarterly)</option><option value="180">180 Days (Half-Year)</option><option value="365">365 Days (Structural)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">Allocation ($)</label>
+                  <input type="number" value={targetBudget} onChange={(e) => setTargetBudget(e.target.value)} className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 text-base" placeholder="10000" step="1000" min="100" />
+                </div>
               </div>
               <div>
-                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Time Horizon</label>
-                <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500 shadow-inner appearance-none text-lg">
-                  <option value="30">30 Days (Tactical)</option>
-                  <option value="90">90 Days (Quarterly)</option>
-                  <option value="180">180 Days (Half-Year)</option>
-                  <option value="365">365 Days (Structural)</option>
-                </select>
+                <label className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">Your Raw Theory (The "Why")</label>
+                <textarea rows="3" value={draftNotes} onChange={(e) => setDraftNotes(e.target.value)} className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-slate-200 text-sm focus:outline-none focus:border-purple-500 custom-scrollbar" placeholder="What structural inefficiency or catalyst is the broader market missing?"></textarea>
+                <button onClick={handlePolishThesis} disabled={isPolishing || !draftTicker || !draftNotes} className="mt-2.5 w-full bg-[#111c38] hover:bg-[#1e3a8a]/80 disabled:opacity-50 text-purple-300 font-bold py-3 rounded-xl flex justify-center items-center gap-2 border border-[#1e3a8a]/50 transition-colors shadow-lg text-sm">
+                  {isPolishing ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4" />}
+                  {isPolishing ? 'Gemini is Synthesizing...' : 'Synthesize Institutional Thesis'}
+                </button>
               </div>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Allocation ($)</label>
-                <input 
-                  type="number" 
-                  value={targetBudget}
-                  onChange={(e) => setTargetBudget(e.target.value)}
-                  className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-3 text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 shadow-inner text-lg" 
-                  placeholder="10000"
-                  step="1000"
-                  min="100"
-                />
-              </div>
+              {aiThesis && (
+                <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-4 shadow-inner relative flex flex-col">
+                  <div className="flex justify-between items-center mb-2.5">
+                    <span className="text-xs font-bold text-purple-400 flex items-center gap-1.5 uppercase tracking-wider"><CheckCircle2 className="w-4 h-4" /> Institutional Thesis (Editable)</span>
+                    <span className="text-[10px] text-slate-500">Edit before committing to S3</span>
+                  </div>
+                  <textarea value={aiThesis} onChange={(e) => setAiThesis(e.target.value)} rows="6" className="w-full bg-[#07050f]/70 border border-[#2d254f]/50 rounded-xl p-3 text-slate-200 text-xs md:text-sm leading-relaxed whitespace-pre-wrap focus:outline-none focus:border-purple-500 custom-scrollbar resize-y" />
+                </div>
+              )}
             </div>
-
-            <div className="mb-6 shrink-0">
-              <label className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5 block">Your Raw Theory (The "Why")</label>
-              <textarea 
-                rows="3" 
-                value={draftNotes}
-                onChange={(e) => setDraftNotes(e.target.value)}
-                className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-4 text-slate-200 text-base focus:outline-none focus:border-purple-500 shadow-inner custom-scrollbar"
-                placeholder="What is the market missing?"
-              ></textarea>
-              <button 
-                onClick={handlePolishThesis}
-                disabled={isPolishing || !draftTicker || !draftNotes}
-                className="mt-4 w-full bg-[#111c38] hover:bg-[#1e3a8a]/80 disabled:opacity-50 text-purple-400 font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 border border-[#1e3a8a]/50 transition-colors shadow-lg text-lg">
-                {isPolishing ? <Loader2 className="w-5 h-5 animate-spin"/> : <BrainCircuit className="w-5 h-5" />}
-                {isPolishing ? 'Gemini is Reasoning...' : 'Synthesize Institutional Thesis'}
+            <div className="pt-4 mt-3 border-t border-[#2d254f]/50 shrink-0">
+              <button onClick={handleCommitBuy} disabled={!aiThesis || isCommitting} className={`w-full py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 transition-all text-base ${aiThesis ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-[0_0_25px_rgba(16,185,129,0.3)] border border-emerald-400/20' : 'bg-[#07050f]/80 text-slate-600 border border-[#2d254f]/50 cursor-not-allowed'}`}>
+                {isCommitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5"/>}
+                {isCommitting ? 'Writing to AWS S3...' : `Commit $${Number(targetBudget || 0).toLocaleString()} Allocation`}
               </button>
             </div>
-
-            {aiThesis && (
-              <div className="bg-[#10142b]/80 border border-purple-500/30 rounded-2xl p-6 mb-6 shadow-inner relative shrink-0 flex flex-col">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-                <h4 className="text-sm font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider shrink-0">
-                  <CheckCircle2 className="w-5 h-5" /> Institutional Polish Complete (Editable)
-                </h4>
-                <textarea 
-                  value={aiThesis}
-                  onChange={(e) => setAiThesis(e.target.value)}
-                  className="w-full bg-[#07050f]/60 border border-[#2d254f]/50 rounded-xl p-4 text-slate-200 text-sm leading-relaxed whitespace-pre-wrap relative z-10 focus:outline-none focus:border-purple-500 custom-scrollbar min-h-[200px] resize-y"
-                />
-              </div>
-            )}
-
-            <button 
-              onClick={handleCommitBuy}
-              disabled={!aiThesis || isCommitting}
-              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all mt-auto shrink-0 text-lg ${
-                aiThesis ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] border border-emerald-400/20' : 'bg-[#07050f]/80 text-slate-600 border border-[#2d254f]/50 cursor-not-allowed'
-              }`}
-            >
-              {isCommitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <DollarSign className="w-6 h-6"/>}
-              {isCommitting ? 'Saving to AWS S3...' : `Commit $${Number(targetBudget || 0).toLocaleString()} Allocation`}
-            </button>
           </div>
         </div>
       )}

@@ -3471,20 +3471,21 @@ function ThesisVault({ data = [] }) {
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [activeTheses, setActiveTheses] = useState([]);
-  const [historyTheses, setHistoryTheses] = useState([]); // NEW STATE: For Phase 3
+  const [historyTheses, setHistoryTheses] = useState([]);
   const [targetBudget, setTargetBudget] = useState(10000);
   const [notification, setNotification] = useState(null);
+  
+  const [examiningTrade, setExaminingTrade] = useState(null);
+  const [examinerReport, setExaminerReport] = useState('');
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
-  // Fetch both Active and History from S3
   useEffect(() => {
     const fetchTheses = async () => {
       try {
         const resActive = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/active.json?t=${Date.now()}`);
         if (resActive.ok) setActiveTheses(await resActive.json());
 
-        // Fetch the new history file for the Post-Mortem tab
         const resHistory = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/history.json?t=${Date.now()}`);
         if (resHistory.ok) setHistoryTheses(await resHistory.json());
       } catch (err) {
@@ -3628,7 +3629,6 @@ function ThesisVault({ data = [] }) {
     const liveStock = data.find(s => s.t === trade.ticker) || {};
     const exitPrice = liveStock.close || trade.currentPrice || trade.allocation.entry_price;
 
-    // Optimistically remove it from the UI so it feels instantaneous
     setActiveTheses(prev => prev.filter(t => t.thesis_id !== trade.thesis_id));
     setNotification({ type: 'success', message: `Closing ${trade.ticker} and transferring to Post-Mortem history...` });
 
@@ -3651,11 +3651,8 @@ function ThesisVault({ data = [] }) {
 
       if (response.ok) {
          setNotification({ type: 'success', message: `${trade.ticker} successfully closed. Realized P&L locked in.` });
-         
-         // Fetch updated history to populate the Post-Mortem tab instantly
          const resHistory = await fetch(`https://lumina-strategies.s3.ca-central-1.amazonaws.com/data/theories/history.json?t=${Date.now()}`);
          if (resHistory.ok) setHistoryTheses(await resHistory.json());
-
          setTimeout(() => setNotification(null), 4500);
       } else {
          setNotification({ type: 'error', message: 'AWS failed to close trade. Check logs.' });
@@ -3665,6 +3662,39 @@ function ThesisVault({ data = [] }) {
       console.error(err);
       setNotification({ type: 'error', message: 'Network error closing trade.' });
       setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  const handleRunExaminer = async (trade) => {
+    setExaminingTrade(trade);
+    setExaminerReport('');
+    try {
+      const invested = trade.allocation.invested_capital;
+      const pnl = trade.allocation.realized_pnl_dollars || 0;
+      const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
+      const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
+
+      const response = await fetch(THESIS_LAMBDA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'examine',
+          ticker: trade.ticker,
+          pnl_pct: pnlPct.toFixed(2),
+          held_days: heldDays,
+          entry_snapshot: trade.entry_snapshot || {},
+          exit_snapshot: trade.exit_snapshot || {},
+          original_thesis: trade.thesis_narrative?.gemini_institutional_thesis || ''
+        })
+      });
+      const resData = await response.json();
+      if (response.ok) {
+        setExaminerReport(resData.examination);
+      } else {
+        setExaminerReport('Error generating report: ' + (resData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      setExaminerReport("Connection to Lambda failed.");
     }
   };
 
@@ -3817,7 +3847,9 @@ function ThesisVault({ data = [] }) {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => handleRunExaminer(trade)}
+                          className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
                           Run Examiner
                         </button>
                       </td>
@@ -3831,8 +3863,8 @@ function ThesisVault({ data = [] }) {
       </div>
 
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
-          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
+          <div className="w-full max-w-3xl h-[88vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.2)] animate-slide-up relative">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400 w-6 h-6"/> New Thesis Allocation</h3>
               <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={18}/></button>
@@ -3877,6 +3909,45 @@ function ThesisVault({ data = [] }) {
                 {isCommitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5"/>}
                 {isCommitting ? 'Writing to AWS S3...' : `Commit $${Number(targetBudget || 0).toLocaleString()} Allocation`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXAMINER MODAL */}
+      {examiningTrade && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
+          <div className="w-full max-w-4xl h-[88vh] bg-[#0d0b1a] border border-indigo-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.2)] animate-slide-up relative">
+            <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
+              <h3 className="text-xl md:text-2xl font-serif font-medium text-slate-200 flex items-center gap-2">
+                <BrainCircuit className="text-indigo-400 w-6 h-6"/> AI Post-Mortem Examiner: {examiningTrade.ticker}
+              </h3>
+              <button onClick={() => setExaminingTrade(null)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={18}/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-5">
+              <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
+                <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">Original Thesis Alignment</h4>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  {examiningTrade.thesis_narrative?.gemini_institutional_thesis || 'No original thesis recorded.'}
+                </p>
+              </div>
+              
+              {!examinerReport ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mb-4" />
+                  <p className="text-sm text-slate-400">Chief Risk Officer AI is grading the execution...</p>
+                </div>
+              ) : (
+                <div className="bg-[#10142b]/80 border border-indigo-500/30 rounded-2xl p-5 shadow-inner">
+                  <h4 className="text-sm font-bold text-indigo-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                    <CheckCircle2 className="w-4 h-4" /> Chief Risk Officer Evaluation
+                  </h4>
+                  <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+                    {examinerReport}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -3862,9 +3862,10 @@ function ThesisVault({ data = [] }) {
         )}
       </div>
 
+      {/* DRAFTING MODAL */}
       {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
-          <div className="w-full max-w-3xl h-[88vh] bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.2)] animate-slide-up relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400 w-6 h-6"/> New Thesis Allocation</h3>
               <button onClick={() => setIsDrafting(false)} className="text-slate-400 hover:text-white bg-[#111c38] p-2 rounded-full border border-[#1e3a8a]/50 transition-colors"><X size={18}/></button>
@@ -3916,8 +3917,8 @@ function ThesisVault({ data = [] }) {
 
       {/* EXAMINER MODAL */}
       {examiningTrade && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-center p-4 md:p-6">
-          <div className="w-full max-w-4xl h-[88vh] bg-[#0d0b1a] border border-indigo-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.2)] animate-slide-up relative">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-4xl bg-[#0d0b1a] border border-indigo-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.2)] animate-slide-up relative my-auto">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-slate-200 flex items-center gap-2">
                 <BrainCircuit className="text-indigo-400 w-6 h-6"/> AI Post-Mortem Examiner: {examiningTrade.ticker}

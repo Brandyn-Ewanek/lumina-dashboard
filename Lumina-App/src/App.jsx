@@ -3468,6 +3468,7 @@ function ThesisVault({ data = [], insiderData = [] }) {
   const [isDrafting, setIsDrafting] = useState(false);
   const [draftTicker, setDraftTicker] = useState('');
   const [draftNotes, setDraftNotes] = useState('');
+  const [draftHorizon, setDraftHorizon] = useState('90'); // NEW: State for Time Horizon
   const [aiThesis, setAiThesis] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -3536,7 +3537,6 @@ function ThesisVault({ data = [], insiderData = [] }) {
       const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
       const liveScore = calculateLuminaScore(trade.ticker);
       
-      // Fallback for prior trades saved with 0
       const savedEntryScore = trade.entry_snapshot?.lumina_score;
       const entryScore = (savedEntryScore && savedEntryScore > 0) ? savedEntryScore : liveScore;
 
@@ -3577,7 +3577,7 @@ function ThesisVault({ data = [], insiderData = [] }) {
           ticker: draftTicker,
           entry_price: livePrice,
           target_price: liveTarget,
-          horizon: 90,
+          horizon: Number(draftHorizon), // FIXED: Now passes your selected days to Gemini
           fwd_pe: metrics.fwd_pe || 15.5,
           de: metrics.de || 0.5,
           lumina_score: metrics.lumina_score || 75,
@@ -3601,8 +3601,9 @@ function ThesisVault({ data = [], insiderData = [] }) {
       const liveTarget = draftStockData.target || livePrice * 1.25;
       const metrics = getSnapshotMetrics(draftTicker);
       
+      const horizonDays = Number(draftHorizon) || 90; // FIXED: Dynamic Horizon
       const targetDateObj = new Date();
-      targetDateObj.setDate(targetDateObj.getDate() + 90);
+      targetDateObj.setDate(targetDateObj.getDate() + horizonDays); // FIXED: Add exact selected days
       const targetDateStr = targetDateObj.toISOString().split('T')[0];
 
       const budgetVal = Number(targetBudget) || 10000;
@@ -3617,7 +3618,7 @@ function ThesisVault({ data = [], insiderData = [] }) {
           target_budget: budgetVal,
           entry_price: livePrice, 
           target_price: liveTarget,
-          horizon_days: 90,
+          horizon_days: horizonDays, // FIXED: Sends exact days to S3
           target_date: targetDateStr,
           polished_thesis: aiThesis,
           raw_notes: draftNotes,
@@ -3636,7 +3637,7 @@ function ThesisVault({ data = [], insiderData = [] }) {
             entry_price: livePrice,
             invested_capital: Math.round(sharesCount * livePrice * 100) / 100
           },
-          timeline: { entry_date: new Date().toISOString().split('T')[0], target_date: targetDateStr, days_horizon: 90 },
+          timeline: { entry_date: new Date().toISOString().split('T')[0], target_date: targetDateStr, days_horizon: horizonDays },
           targets: { target_price: liveTarget },
           thesis_narrative: { user_raw_notes: draftNotes, gemini_institutional_thesis: aiThesis },
           entry_snapshot: metrics
@@ -3648,6 +3649,7 @@ function ThesisVault({ data = [], insiderData = [] }) {
         setDraftNotes('');
         setDraftTicker('');
         setTargetBudget(10000);
+        setDraftHorizon('90'); // RESET
 
         setNotification({ type: 'success', message: `${draftTicker} allocation ($${budgetVal.toLocaleString()}) locked into Vault.` });
         setTimeout(() => setNotification(null), 4500);
@@ -3944,8 +3946,16 @@ function ThesisVault({ data = [], insiderData = [] }) {
                 </div>
                 <div>
                   <label className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 block">Time Horizon</label>
-                  <select className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none text-sm">
-                    <option value="30">30 Days (Tactical)</option><option value="90">90 Days (Quarterly)</option><option value="180">180 Days (Half-Year)</option><option value="365">365 Days (Structural)</option>
+                  {/* FIXED: Dropdown is now linked to state */}
+                  <select 
+                    value={draftHorizon}
+                    onChange={(e) => setDraftHorizon(e.target.value)}
+                    className="w-full bg-[#07050f]/90 border border-[#1e3a8a]/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-purple-500 appearance-none text-sm"
+                  >
+                    <option value="30">30 Days (Tactical)</option>
+                    <option value="90">90 Days (Quarterly)</option>
+                    <option value="180">180 Days (Half-Year)</option>
+                    <option value="365">365 Days (Structural)</option>
                   </select>
                 </div>
                 <div>

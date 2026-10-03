@@ -3478,6 +3478,7 @@ function ThesisVault({ data = [] }) {
   
   const [examiningTrade, setExaminingTrade] = useState(null);
   const [examinerReport, setExaminerReport] = useState('');
+  const [isExamining, setIsExamining] = useState(false); // NEW STATE for re-running reports
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
@@ -3666,9 +3667,19 @@ function ThesisVault({ data = [] }) {
     }
   };
 
-  const handleRunExaminer = async (trade) => {
+  // NEW: Instantly open modal. If report exists, show it. If not, run it automatically.
+  const openExaminerModal = (trade) => {
     setExaminingTrade(trade);
-    setExaminerReport('');
+    if (trade.examiner_report) {
+      setExaminerReport(trade.examiner_report);
+    } else {
+      setExaminerReport('');
+      executeExaminer(trade);
+    }
+  };
+
+  const executeExaminer = async (trade) => {
+    setIsExamining(true);
     try {
       const invested = trade.allocation.invested_capital;
       const pnl = trade.allocation.realized_pnl_dollars || 0;
@@ -3680,23 +3691,29 @@ function ThesisVault({ data = [] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'examine',
+          thesis_id: trade.thesis_id,
           ticker: trade.ticker,
           pnl_pct: pnlPct.toFixed(2),
+          pnl_dollars: pnl.toFixed(2),
           held_days: heldDays,
           entry_snapshot: trade.entry_snapshot || {},
           exit_snapshot: trade.exit_snapshot || {},
-          original_thesis: trade.thesis_narrative?.gemini_institutional_thesis || ''
+          original_thesis: trade.thesis_narrative?.gemini_institutional_thesis || '',
+          previous_report: trade.examiner_report || ''
         })
       });
       const resData = await response.json();
       if (response.ok) {
         setExaminerReport(resData.examination);
+        // Optimistically update local state so the report is cached
+        setHistoryTheses(prev => prev.map(t => t.thesis_id === trade.thesis_id ? { ...t, examiner_report: resData.examination } : t));
       } else {
         setExaminerReport('Error generating report: ' + (resData.error || 'Unknown error'));
       }
     } catch (err) {
       setExaminerReport("Connection to Lambda failed.");
     }
+    setIsExamining(false);
   };
 
   return (
@@ -3850,9 +3867,9 @@ function ThesisVault({ data = [] }) {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button 
-                            onClick={() => handleRunExaminer(trade)}
+                            onClick={() => openExaminerModal(trade)}
                             className="text-[10px] uppercase tracking-wider font-bold bg-[#111c38] hover:bg-purple-500/20 text-purple-400 border border-[#1e3a8a]/50 hover:border-purple-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                            Run Examiner
+                            {trade.examiner_report ? 'View Report' : 'Run Examiner'}
                           </button>
                         </td>
                       </tr>
@@ -3930,19 +3947,40 @@ function ThesisVault({ data = [] }) {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-5">
+              
+              {/* COMPARATIVE METRICS GRID */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Entry Snapshot</h4>
+                  <div className="space-y-1 font-mono text-sm">
+                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-white">{examiningTrade.entry_snapshot?.lumina_score || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Fwd P/E:</span> <span className="text-white">{examiningTrade.entry_snapshot?.fwd_pe || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">D/E Ratio:</span> <span className="text-white">{examiningTrade.entry_snapshot?.de || 0}</span></div>
+                  </div>
+                </div>
+                <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
+                  <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Exit Snapshot</h4>
+                  <div className="space-y-1 font-mono text-sm">
+                    <div className="flex justify-between"><span className="text-slate-400">Lumina Score:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.lumina_score || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Fwd P/E:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.fwd_pe || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">D/E Ratio:</span> <span className="text-cyan-400">{examiningTrade.exit_snapshot?.de || 0}</span></div>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-[#111c38]/40 border border-[#1e3a8a]/30 rounded-xl p-4">
-                <h4 className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">Original Thesis Alignment</h4>
+                <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Original Thesis Alignment</h4>
                 <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
                   {examiningTrade.thesis_narrative?.gemini_institutional_thesis || 'No original thesis recorded.'}
                 </p>
               </div>
               
-              {!examinerReport ? (
+              {!examinerReport && isExamining ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mb-4" />
                   <p className="text-sm text-slate-400">Chief Risk Officer AI is grading the execution...</p>
                 </div>
-              ) : (
+              ) : examinerReport && (
                 <div className="bg-[#10142b]/80 border border-indigo-500/30 rounded-2xl p-5 shadow-inner">
                   <h4 className="text-sm font-bold text-indigo-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
                     <CheckCircle2 className="w-4 h-4" /> Chief Risk Officer Evaluation
@@ -3952,6 +3990,18 @@ function ThesisVault({ data = [] }) {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ACTION FOOTER */}
+            <div className="pt-4 mt-3 border-t border-[#2d254f]/50 shrink-0">
+              <button 
+                onClick={() => executeExaminer(examiningTrade)}
+                disabled={isExamining}
+                className="w-full py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 bg-[#111c38] hover:bg-indigo-500/20 text-indigo-400 border border-[#1e3a8a]/50 transition-colors"
+              >
+                {isExamining ? <Loader2 className="w-5 h-5 animate-spin" /> : <BrainCircuit className="w-5 h-5"/>}
+                {isExamining ? 'Re-evaluating metrics...' : examinerReport ? 'Force Report Re-Evaluation' : 'Generate Initial Evaluation'}
+              </button>
             </div>
           </div>
         </div>

@@ -131,29 +131,65 @@ def lambda_handler(event, context):
             return {"statusCode": 200, "headers": headers, "body": json.dumps({"message": "Trade moved to Post-Mortem history"})}
 
         elif action == 'examine':
+            thesis_id = body.get('thesis_id')
+            ticker = body.get('ticker')
+            pnl_pct = body.get('pnl_pct')
+            pnl_dollars = body.get('pnl_dollars')
+            held_days = body.get('held_days')
+            entry_snapshot = body.get('entry_snapshot', {})
+            exit_snapshot = body.get('exit_snapshot', {})
+            original_thesis = body.get('original_thesis', '')
+            previous_report = body.get('previous_report', '')
+
             prompt = f"""
-            You are the Chief Risk Officer at an institutional fund. Conduct a ruthless post-mortem on this closed trade.
-            Ticker: {body.get('ticker')}
-            P&L: {body.get('pnl_pct')}%
-            Held for: {body.get('held_days')} days
+            You are the Chief Risk Officer at an institutional fund. Conduct a rigorous, objective post-mortem on this closed trade.
             
-            Entry Snapshot: {body.get('entry_snapshot')}
-            Exit Snapshot: {body.get('exit_snapshot')}
+            Ticker: {ticker}
+            Realized P&L: ${pnl_dollars} ({pnl_pct}%)
+            Held for: {held_days} days
             
-            Original Thesis: {body.get('original_thesis')}
+            Entry Metrics Snapshot: {entry_snapshot}
+            Exit Metrics Snapshot: {exit_snapshot}
+            
+            Original Thesis: {original_thesis}
+            
+            Previous Evaluation (if any): {previous_report if previous_report else 'None. This is the first evaluation.'}
             
             Output strictly in this format:
-            INSTITUTIONAL GRADE: (Give a bold letter grade A through F with a one-sentence justification based on P&L vs Thesis execution).
+            **FINAL VERDICT & GRADE**: (Give a bold letter grade A through F with a concise justification based on Realized Profit/Loss vs Thesis execution).
             
-            POST-MORTEM ANALYSIS:
-            - (Concise bullet point 1)
-            - (Concise bullet point 2)
+            **3 REASONS SUPPORTING THE EXECUTION**:
+            1. 
+            2. 
+            3. 
             
-            FORWARD APPLICATION:
-            - (Specific lesson for future portfolio allocation).
+            **3 REASONS AGAINST THE EXECUTION**:
+            1. 
+            2. 
+            3. 
+            
+            **EVOLUTION FROM PREVIOUS REVIEW** (if applicable):
+            - (Note any changes in your assessment from the previous report based on repeated review. If none, state "No previous report to evolve from.")
             """
+            
             response = client.models.generate_content(model='gemini-3.1-pro-preview', contents=prompt)
-            return {"statusCode": 200, "headers": headers, "body": json.dumps({"examination": response.text})}
+            new_report = response.text
+            
+            # Save report permanently back to history.json
+            try:
+                s3_history = s3.get_object(Bucket=BUCKET_NAME, Key=HISTORY_THEORIES_KEY)
+                history_theories = json.loads(s3_history['Body'].read().decode('utf-8'))
+                
+                for t in history_theories:
+                    if t.get('thesis_id') == thesis_id:
+                        t['examiner_report'] = new_report
+                        break
+                        
+                s3.put_object(Bucket=BUCKET_NAME, Key=HISTORY_THEORIES_KEY, Body=json.dumps(history_theories, indent=2), ContentType='application/json')
+            except Exception as e:
+                print("Failed to save report to S3:", e)
+
+            return {"statusCode": 200, "headers": headers, "body": json.dumps({"examination": new_report})}
 
         else:
             return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "No valid action provided."})}

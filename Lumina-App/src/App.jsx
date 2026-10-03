@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   LineChart, Search, TrendingUp, TrendingDown, Activity, Globe, Newspaper,
   ChevronRight, Bell, Menu, Sparkles, Filter, Plus, Check, ListOrdered, 
@@ -3698,7 +3699,6 @@ function ThesisVault({ data = [] }) {
     }
   };
 
-  // NEW: Wrapped in a Fragment <> so modals render outside the constrained card
   return (
     <>
       <div className="flex flex-col h-full bg-[#0d0b1a]/80 backdrop-blur-2xl border border-[#2d254f]/50 text-slate-200 p-6 rounded-3xl shadow-xl shadow-black/40 animate-slide-up">
@@ -3865,9 +3865,9 @@ function ThesisVault({ data = [] }) {
         </div>
       </div>
 
-      {/* DRAFTING MODAL */}
-      {isDrafting && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+      {/* DRAFTING MODAL PORTAL */}
+      {isDrafting && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
           <div className="w-full max-w-4xl bg-[#0d0b1a] border border-purple-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(126,34,206,0.15)] animate-slide-up relative my-auto">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-amber-50/90 flex items-center gap-2"><Target className="text-purple-400 w-6 h-6"/> New Thesis Allocation</h3>
@@ -3916,11 +3916,11 @@ function ThesisVault({ data = [] }) {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
-      {/* EXAMINER MODAL */}
-      {examiningTrade && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
+      {/* EXAMINER MODAL PORTAL */}
+      {examiningTrade && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex justify-center items-start pt-10 pb-10 px-4 overflow-y-auto custom-scrollbar">
           <div className="w-full max-w-4xl bg-[#0d0b1a] border border-indigo-500/30 rounded-3xl p-6 md:p-8 flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.2)] animate-slide-up relative my-auto">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-[#2d254f]/50 shrink-0">
               <h3 className="text-xl md:text-2xl font-serif font-medium text-slate-200 flex items-center gap-2">
@@ -3955,7 +3955,7 @@ function ThesisVault({ data = [] }) {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }

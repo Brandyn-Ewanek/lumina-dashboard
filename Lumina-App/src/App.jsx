@@ -3478,7 +3478,7 @@ function ThesisVault({ data = [] }) {
   
   const [examiningTrade, setExaminingTrade] = useState(null);
   const [examinerReport, setExaminerReport] = useState('');
-  const [isExamining, setIsExamining] = useState(false); // NEW STATE for re-running reports
+  const [isExamining, setIsExamining] = useState(false);
 
   const THESIS_LAMBDA_URL = 'https://tnpkd3ny7ry2evhn6qenn3yaxe0lsmqu.lambda-url.ca-central-1.on.aws/';
 
@@ -3501,6 +3501,7 @@ function ThesisVault({ data = [] }) {
     return activeTheses.filter(t => t.status === 'OPEN').map(trade => {
       const liveStock = data.find(s => s.t === trade.ticker);
       const currentPrice = liveStock ? liveStock.close : trade.allocation.entry_price;
+      const liveScore = liveStock ? (liveStock.total_score || 0) : (trade.entry_snapshot?.lumina_score || 0);
       
       const invested = trade.allocation.invested_capital;
       const currentVal = trade.allocation.shares * currentPrice;
@@ -3511,7 +3512,7 @@ function ThesisVault({ data = [] }) {
       const today = new Date();
       const daysLeft = Math.max(0, Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)));
 
-      return { ...trade, currentPrice, pnlDol, pnlPct, daysLeft };
+      return { ...trade, currentPrice, pnlDol, pnlPct, daysLeft, liveScore };
     });
   }, [activeTheses, data]);
 
@@ -3603,7 +3604,13 @@ function ThesisVault({ data = [] }) {
           },
           timeline: { entry_date: new Date().toISOString().split('T')[0], target_date: targetDateStr, days_horizon: 90 },
           targets: { target_price: liveTarget },
-          thesis_narrative: { user_raw_notes: draftNotes, gemini_institutional_thesis: aiThesis }
+          thesis_narrative: { user_raw_notes: draftNotes, gemini_institutional_thesis: aiThesis },
+          entry_snapshot: {
+            fwd_pe: draftStockData.forwardPE || draftStockData.peRatio || 0,
+            de: draftStockData.debtToEquity || 0,
+            lumina_score: draftStockData.total_score || 0,
+            catalyst_news: draftStockData.recent_news || ""
+          }
         };
 
         setActiveTheses(prev => [optimisticTrade, ...prev.filter(t => t.thesis_id !== optimisticTrade.thesis_id)]);
@@ -3667,7 +3674,6 @@ function ThesisVault({ data = [] }) {
     }
   };
 
-  // NEW: Instantly open modal. If report exists, show it. If not, run it automatically.
   const openExaminerModal = (trade) => {
     setExaminingTrade(trade);
     if (trade.examiner_report) {
@@ -3705,7 +3711,6 @@ function ThesisVault({ data = [] }) {
       const resData = await response.json();
       if (response.ok) {
         setExaminerReport(resData.examination);
-        // Optimistically update local state so the report is cached
         setHistoryTheses(prev => prev.map(t => t.thesis_id === trade.thesis_id ? { ...t, examiner_report: resData.examination } : t));
       } else {
         setExaminerReport('Error generating report: ' + (resData.error || 'Unknown error'));
@@ -3784,6 +3789,7 @@ function ThesisVault({ data = [] }) {
                   <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
                   <th className="py-3 px-4 font-bold">Allocated</th>
                   <th className="py-3 px-4 font-bold">Entry / Target</th>
+                  <th className="py-3 px-4 font-bold">Score (In → Live)</th>
                   <th className="py-3 px-4 font-bold">Time Horizon</th>
                   <th className="py-3 px-4 font-bold text-right">Live P&L</th>
                   <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
@@ -3791,7 +3797,7 @@ function ThesisVault({ data = [] }) {
               </thead>
               <tbody className="divide-y divide-[#2d254f]/30">
                 {liveTheses.length === 0 ? (
-                  <tr><td colSpan="6" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
+                  <tr><td colSpan="7" className="py-8 text-center text-slate-500">No active theses found in S3. Draft one to begin.</td></tr>
                 ) : (
                   liveTheses.map((trade) => (
                     <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors group">
@@ -3801,6 +3807,11 @@ function ThesisVault({ data = [] }) {
                       </td>
                       <td className="py-3 px-4">
                         <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-cyan-400">${trade.targets.target_price.toFixed(2)}</span></div>
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        <div className="text-slate-400">
+                          {trade.entry_snapshot?.lumina_score || 0} → <span className={trade.liveScore >= (trade.entry_snapshot?.lumina_score || 0) ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{trade.liveScore}</span>
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="w-48 bg-[#07050f] rounded-full h-1.5 mt-2 border border-[#2d254f]/50 overflow-hidden">
@@ -3835,6 +3846,7 @@ function ThesisVault({ data = [] }) {
                   <th className="py-3 px-4 font-bold rounded-tl-xl">Asset</th>
                   <th className="py-3 px-4 font-bold">Invested</th>
                   <th className="py-3 px-4 font-bold">Entry / Exit Price</th>
+                  <th className="py-3 px-4 font-bold">Score (In → Out)</th>
                   <th className="py-3 px-4 font-bold">Duration</th>
                   <th className="py-3 px-4 font-bold text-right">Realized P&L</th>
                   <th className="py-3 px-4 font-bold text-right rounded-tr-xl">Action</th>
@@ -3842,12 +3854,15 @@ function ThesisVault({ data = [] }) {
               </thead>
               <tbody className="divide-y divide-[#2d254f]/30">
                 {historyTheses.length === 0 ? (
-                  <tr><td colSpan="6" className="py-8 text-center text-slate-500">No closed trades found in Post-Mortem history.</td></tr>
+                  <tr><td colSpan="7" className="py-8 text-center text-slate-500">No closed trades found in Post-Mortem history.</td></tr>
                 ) : (
                   historyTheses.map((trade) => {
                     const pnl = trade.allocation.realized_pnl_dollars || 0;
                     const pnlPct = (pnl / trade.allocation.invested_capital) * 100;
                     const heldDays = Math.ceil((new Date(trade.timeline.exit_date) - new Date(trade.timeline.entry_date)) / (1000 * 60 * 60 * 24)) || 1;
+                    
+                    const entryScore = trade.entry_snapshot?.lumina_score || 0;
+                    const exitScore = trade.exit_snapshot?.lumina_score || 0;
 
                     return (
                       <tr key={trade.thesis_id} className="hover:bg-[#16122b]/80 transition-colors">
@@ -3855,6 +3870,11 @@ function ThesisVault({ data = [] }) {
                         <td className="py-3 px-4 font-mono text-slate-300">${trade.allocation.invested_capital.toLocaleString()}</td>
                         <td className="py-3 px-4">
                           <div className="font-mono text-slate-300">${trade.allocation.entry_price.toFixed(2)} → <span className="text-white">${(trade.allocation.exit_price || 0).toFixed(2)}</span></div>
+                        </td>
+                        <td className="py-3 px-4 font-mono">
+                          <div className="text-slate-400">
+                            {entryScore} → <span className={exitScore >= entryScore ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>{exitScore}</span>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-slate-300">{heldDays} Days</td>
                         <td className="py-3 px-4 text-right font-mono">
